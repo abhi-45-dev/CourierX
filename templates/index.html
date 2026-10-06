@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>CourierX Management System</title>
+
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='css/style.css') }}"
+    >
+
+    <style>
+        /* =====================================================
+           TRACKING DETAILS
+        ====================================================== */
+
+        .tracking-details {
+            display: none;
+            margin-top: 24px;
+            animation: trackingReveal 0.35s ease;
+        }
+
+        .tracking-details.show {
+            display: block;
+        }
+
+        @keyframes trackingReveal {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .tracking-details-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+            padding: 28px 30px;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+        }
+
+        .tracking-number-display {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            margin: 7px 0;
+        }
+
+        .tracking-subtitle {
+            color: #7f8ca8;
+            font-size: 14px;
+        }
+
+        .tracking-status-large {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            background: rgba(59, 130, 246, 0.12);
+            color: #8ab4ff;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .tracking-info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            padding: 24px 30px;
+        }
+
+        .tracking-info-card {
+            padding: 20px;
+            border-radius: 18px;
+            background: rgba(255,255,255,0.025);
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .tracking-info-label {
+            display: block;
+            color: #71809e;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 8px;
+        }
+
+        .tracking-info-value {
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .tracking-info-small {
+            margin-top: 5px;
+            color: #7886a2;
+            font-size: 13px;
+        }
+
+        .tracking-route {
+            margin: 0 30px 24px;
+            padding: 24px;
+            border-radius: 20px;
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(79, 70, 229, 0.12),
+                    rgba(59, 130, 246, 0.05)
+                );
+            border: 1px solid rgba(99, 102, 241, 0.16);
+        }
+
+        .tracking-route-title {
+            color: #7f8ca8;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-bottom: 18px;
+        }
+
+        .route-row {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .route-point:last-child {
+            text-align: right;
+        }
+
+        .route-label {
+            display: block;
+            color: #7785a1;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+
+        .route-name {
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .route-city {
+            color: #7d8aa5;
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        .route-arrow {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(
+                135deg,
+                #3969ff,
+                #7042f5
+            );
+            box-shadow:
+                0 10px 30px rgba(72, 76, 255, 0.25);
+        }
+
+        .route-arrow i {
+            color: white;
+        }
+
+        .tracking-history {
+            padding: 0 30px 30px;
+        }
+
+        .tracking-history-title {
+            font-size: 18px;
+            font-weight: 800;
+            margin-bottom: 20px;
+        }
+
+        .tracking-empty {
+            padding: 25px;
+            border-radius: 16px;
+            background: rgba(255,255,255,0.025);
+            color: #7886a2;
+            text-align: center;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+
+        .timeline::before {
+            content: "";
+            position: absolute;
+            left: 8px;
+            top: 8px;
+            bottom: 8px;
+            width: 2px;
+            background: rgba(99, 102, 241, 0.2);
+        }
+
+        .timeline-item {
+            position: relative;
+            padding: 0 0 22px 20px;
+        }
+
+        .timeline-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: -30px;
+            top: 2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4f6fff;
+            border: 4px solid #0d1526;
+            box-shadow: 0 0 0 1px rgba(79,111,255,0.35);
+        }
+
+        .timeline-status {
+            font-size: 15px;
+            font-weight: 800;
+        }
+
+        .timeline-location {
+            color: #8592aa;
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        .timeline-time {
+            color: #5e6c87;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        @media (max-width: 900px) {
+            .tracking-info-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .route-row {
+                grid-template-columns: 1fr;
+                text-align: left;
+            }
+
+            .route-point:last-child {
+                text-align: left;
+            }
+
+            .route-arrow {
+                transform: rotate(90deg);
+            }
+
+            .tracking-details-header {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+
+<body>
+
+<div class="app-shell">
+
+    <!-- =====================================================
+         SIDEBAR
+    ====================================================== -->
+
+    <aside class="sidebar">
+
+        <div class="brand">
+
+            <div class="brand-icon">
+                <i class="fa-solid fa-box"></i>
+            </div>
+
+            <div>
+                <h1>CourierX</h1>
+                <span>Management System</span>
+            </div>
+
+        </div>
+
+
+        <nav class="sidebar-nav">
+
+            <p class="nav-label">MAIN</p>
+
+            <a href="#" class="nav-item active">
+                <i class="fa-solid fa-chart-line"></i>
+                <span>Dashboard</span>
+            </a>
+
+            <a href="#" class="nav-item">
+                <i class="fa-solid fa-box-open"></i>
+                <span>Parcels</span>
+            </a>
+
+            <a href="#" class="nav-item">
+                <i class="fa-solid fa-truck-fast"></i>
+                <span>Shipments</span>
+            </a>
+
+            <a href="#" class="nav-item">
+                <i class="fa-solid fa-location-dot"></i>
+                <span>Tracking</span>
+            </a>
+
+
+            <p class="nav-label">MANAGEMENT</p>
+
+            <a href="#" class="nav-item">
+                <i class="fa-solid fa-users"></i>
+                <span>Customers</span>
+            </a>
+
+            <a href="#" class="nav-item">
+                <i class="fa-solid fa-building"></i>
+                <span>Branches</span>
+            </a>
+
+            <a href="#" class="nav-item">
+                <i class="fa-solid fa-user-tie"></i>
+                <span>Employees</span>
+            </a>
+
+            <a href="#" class="nav-item">
+                <i class="fa-solid fa-car-side"></i>
+                <span>Vehicles</span>
+            </a>
+
+
+            <p class="nav-label">FINANCE</p>
+
+            <a href="#" class="nav-item">
+                <i class="fa-solid fa-credit-card"></i>
+                <span>Payments</span>
+            </a>
+
+            <a href="#" class="nav-item">
+                <i class="fa-solid fa-star"></i>
+                <span>Feedback</span>
+            </a>
+
+        </nav>
+
+
+        <div class="sidebar-footer">
+
+            <div class="system-status">
+
+                <span class="status-dot"></span>
+
+                <div>
+                    <strong>System Online</strong>
+                    <small>MySQL Connected</small>
+                </div>
+
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <!-- =====================================================
+         MAIN CONTENT
+    ====================================================== -->
+
+    <main class="main-content">
+
+
+        <!-- TOPBAR -->
+
+        <header class="topbar">
+
+            <div class="topbar-left">
+
+                <button class="icon-button">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+
+                <div>
+                    <h2>Dashboard</h2>
+                    <p>Courier &amp; Parcel Tracking Management</p>
+                </div>
+
+            </div>
+
+
+            <div class="topbar-right">
+
+                <button class="icon-button">
+                    <i class="fa-regular fa-bell"></i>
+                </button>
+
+                <div class="admin-profile">
+
+                    <div class="avatar">
+                        AD
+                    </div>
+
+                    <div class="admin-info">
+                        <strong>Administrator</strong>
+                        <span>System Admin</span>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </header>
+
+
+        <!-- =================================================
+             DASHBOARD
+        ================================================== -->
+
+        <section class="dashboard-content">
+
+
+            <!-- HERO -->
+
+            <div class="hero-card">
+
+                <div class="hero-content">
+
+                    <div class="hero-icon">
+                        <i class="fa-solid fa-location-crosshairs"></i>
+                    </div>
+
+                    <div>
+
+                        <span class="eyebrow">
+                            PARCEL TRACKING
+                        </span>
+
+                        <h1>
+                            Track your parcel
+                        </h1>
+
+                        <p>
+                            Enter a tracking number to view
+                            the latest shipment status and
+                            delivery updates.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="tracking-box">
+
+                    <div class="tracking-input-wrapper">
+
+                        <i class="fa-solid fa-magnifying-glass"></i>
+
+                        <input
+                            type="text"
+                            id="trackingNumber"
+                            placeholder="Enter tracking number..."
+                        >
+
+                    </div>
+
+
+                    <button
+                        id="trackButton"
+                        class="primary-button"
+                    >
+                        <i class="fa-solid fa-location-dot"></i>
+                        Track Parcel
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+                 TRACKING DETAILS
+            ================================================== -->
+
+            <section
+                id="trackingDetails"
+                class="panel tracking-details"
+            >
+
+                <div class="tracking-details-header">
+
+                    <div>
+
+                        <span class="eyebrow">
+                            SHIPMENT DETAILS
+                        </span>
+
+                        <div
+                            id="trackingNumberDisplay"
+                            class="tracking-number-display"
+                        >
+                            —
+                        </div>
+
+                        <div
+                            id="trackingBookingDate"
+                            class="tracking-subtitle"
+                        >
+                            —
+                        </div>
+
+                    </div>
+
+
+                    <div
+                        id="trackingStatusDisplay"
+                        class="tracking-status-large"
+                    >
+                        <i class="fa-solid fa-circle"></i>
+                        <span>Pending</span>
+                    </div>
+
+                </div>
+
+
+                <!-- PARCEL INFORMATION -->
+
+                <div class="tracking-info-grid">
+
+                    <div class="tracking-info-card">
+
+                        <span class="tracking-info-label">
+                            Sender
+                        </span>
+
+                        <div
+                            id="trackingSender"
+                            class="tracking-info-value"
+                        >
+                            —
+                        </div>
+
+                        <div
+                            id="trackingSenderContact"
+                            class="tracking-info-small"
+                        >
+                            —
+                        </div>
+
+                    </div>
+
+
+                    <div class="tracking-info-card">
+
+                        <span class="tracking-info-label">
+                            Receiver
+                        </span>
+
+                        <div
+                            id="trackingReceiver"
+                            class="tracking-info-value"
+                        >
+                            —
+                        </div>
+
+                        <div
+                            id="trackingReceiverContact"
+                            class="tracking-info-small"
+                        >
+                            —
+                        </div>
+
+                    </div>
+
+
+                    <div class="tracking-info-card">
+
+                        <span class="tracking-info-label">
+                            Parcel
+                        </span>
+
+                        <div
+                            id="trackingParcelType"
+                            class="tracking-info-value"
+                        >
+                            —
+                        </div>
+
+                        <div
+                            id="trackingParcelWeight"
+                            class="tracking-info-small"
+                        >
+                            —
+                        </div>
+
+                    </div>
+
+
+                    <div class="tracking-info-card">
+
+                        <span class="tracking-info-label">
+                            Shipping Cost
+                        </span>
+
+                        <div
+                            id="trackingShippingCost"
+                            class="tracking-info-value"
+                        >
+                            —
+                        </div>
+
+                    </div>
+
+
+                    <div class="tracking-info-card">
+
+                        <span class="tracking-info-label">
+                            Origin Branch
+                        </span>
+
+                        <div
+                            id="trackingOriginBranch"
+                            class="tracking-info-value"
+                        >
+                            —
+                        </div>
+
+                        <div
+                            id="trackingOriginCity"
+                            class="tracking-info-small"
+                        >
+                            —
+                        </div>
+
+                    </div>
+
+
+                    <div class="tracking-info-card">
+
+                        <span class="tracking-info-label">
+                            Destination Branch
+                        </span>
+
+                        <div
+                            id="trackingDestinationBranch"
+                            class="tracking-info-value"
+                        >
+                            —
+                        </div>
+
+                        <div
+                            id="trackingDestinationCity"
+                            class="tracking-info-small"
+                        >
+                            —
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- ROUTE -->
+
+                <div class="tracking-route">
+
+                    <div class="tracking-route-title">
+                        Shipment Route
+                    </div>
+
+                    <div class="route-row">
+
+                        <div class="route-point">
+
+                            <span class="route-label">
+                                ORIGIN
+                            </span>
+
+                            <div
+                                id="routeOrigin"
+                                class="route-name"
+                            >
+                                —
+                            </div>
+
+                            <div
+                                id="routeOriginCity"
+                                class="route-city"
+                            >
+                                —
+                            </div>
+
+                        </div>
+
+
+                        <div class="route-arrow">
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+
+
+                        <div class="route-point">
+
+                            <span class="route-label">
+                                DESTINATION
+                            </span>
+
+                            <div
+                                id="routeDestination"
+                                class="route-name"
+                            >
+                                —
+                            </div>
+
+                            <div
+                                id="routeDestinationCity"
+                                class="route-city"
+                            >
+                                —
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <!-- TRACKING HISTORY -->
+
+                <div class="tracking-history">
+
+                    <div class="tracking-history-title">
+                        Tracking History
+                    </div>
+
+                    <div
+                        id="trackingTimeline"
+                        class="tracking-empty"
+                    >
+                        No tracking updates recorded yet.
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- =================================================
+                 STATS
+            ================================================== -->
+
+            <div class="stats-grid">
+
+                <div class="stat-card">
+
+                    <div class="stat-icon purple">
+                        <i class="fa-solid fa-box"></i>
+                    </div>
+
+                    <div class="stat-content">
+                        <span>Total Parcels</span>
+                        <strong id="totalParcels">0</strong>
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card">
+
+                    <div class="stat-icon orange">
+                        <i class="fa-solid fa-truck-fast"></i>
+                    </div>
+
+                    <div class="stat-content">
+                        <span>In Transit</span>
+                        <strong id="inTransit">0</strong>
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card">
+
+                    <div class="stat-icon green">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+
+                    <div class="stat-content">
+                        <span>Delivered</span>
+                        <strong id="delivered">0</strong>
+                    </div>
+
+                </div>
+
+
+                <div class="stat-card">
+
+                    <div class="stat-icon blue">
+                        <i class="fa-solid fa-users"></i>
+                    </div>
+
+                    <div class="stat-content">
+                        <span>Customers</span>
+                        <strong id="totalCustomers">0</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- =================================================
+                 CONTENT GRID
+            ================================================== -->
+
+            <div class="content-grid">
+
+
+                <!-- RECENT PARCELS -->
+
+                <section class="panel recent-panel">
+
+                    <div class="panel-header">
+
+                        <div>
+
+                            <span class="eyebrow">
+                                DATABASE
+                            </span>
+
+                            <h2>
+                                Recent Parcels
+                            </h2>
+
+                            <span class="panel-subtitle">
+                                Latest parcel activity
+                            </span>
+
+                        </div>
+
+
+                        <button class="secondary-button">
+                            View All
+                        </button>
+
+                    </div>
+
+
+                    <div class="table-wrapper">
+
+                        <table>
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>
+                                        Tracking ID
+                                    </th>
+
+                                    <th>
+                                        Customer
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                    <th>
+                                        Booking Date
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody id="recentParcels">
+
+                                <tr>
+
+                                    <td
+                                        colspan="4"
+                                        class="empty-state"
+                                    >
+                                        Loading...
+                                    </td>
+
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </section>
+
+
+                <!-- QUICK ACTIONS -->
+
+                <section class="panel quick-panel">
+
+                    <div class="panel-header">
+
+                        <div>
+
+                            <span class="eyebrow">
+                                OPERATIONS
+                            </span>
+
+                            <h2>
+                                Quick Actions
+                            </h2>
+
+                            <span class="panel-subtitle">
+                                Common operations
+                            </span>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="quick-actions">
+
+
+                        <button
+                            id="newParcelButton"
+                            class="quick-action"
+                        >
+
+                            <div class="quick-icon purple">
+
+                                <i class="fa-solid fa-plus"></i>
+
+                            </div>
+
+                            <div>
+
+                                <strong>
+                                    New Parcel
+                                </strong>
+
+                                <span>
+                                    Create a shipment
+                                </span>
+
+                            </div>
+
+                            <i class="fa-solid fa-chevron-right"></i>
+
+                        </button>
+
+
+                        <button
+                            id="updateTrackingButton"
+                            class="quick-action"
+                        >
+
+                            <div class="quick-icon blue">
+
+                                <i class="fa-solid fa-location-dot"></i>
+
+                            </div>
+
+                            <div>
+
+                                <strong>
+                                    Update Tracking
+                                </strong>
+
+                                <span>
+                                    Add tracking event
+                                </span>
+
+                            </div>
+
+                            <i class="fa-solid fa-chevron-right"></i>
+
+                        </button>
+
+
+                        <button
+                            id="assignShipmentButton"
+                            class="quick-action"
+                        >
+
+                            <div class="quick-icon orange">
+
+                                <i class="fa-solid fa-truck"></i>
+
+                            </div>
+
+                            <div>
+
+                                <strong>
+                                    Assign Shipment
+                                </strong>
+
+                                <span>
+                                    Assign vehicle &amp; employee
+                                </span>
+
+                            </div>
+
+                            <i class="fa-solid fa-chevron-right"></i>
+
+                        </button>
+
+
+                        <button
+                            id="paymentButton"
+                            class="quick-action"
+                        >
+
+                            <div class="quick-icon green">
+
+                                <i class="fa-solid fa-credit-card"></i>
+
+                            </div>
+
+                            <div>
+
+                                <strong>
+                                    Payment
+                                </strong>
+
+                                <span>
+                                    Manage parcel payment
+                                </span>
+
+                            </div>
+
+                            <i class="fa-solid fa-chevron-right"></i>
+
+                        </button>
+
+                    </div>
+
+                </section>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<!-- =========================================================
+     NEW PARCEL MODAL
+========================================================== -->
+
+<div
+    id="parcelModal"
+    class="modal-overlay"
+    aria-hidden="true"
+>
+
+    <div class="modal-card">
+
+
+        <div class="modal-header">
+
+            <div>
+
+                <span class="eyebrow">
+                    SHIPMENT CREATION
+                </span>
+
+                <h2>
+                    Create New Parcel
+                </h2>
+
+                <p>
+                    Enter sender and receiver details
+                    to create a new shipment.
+                </p>
+
+            </div>
+
+
+            <button
+                id="closeParcelModal"
+                class="modal-close"
+            >
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </div>
+
+
+        <form id="parcelForm">
+
+
+            <!-- SENDER -->
+
+            <div class="form-section">
+
+                <div class="form-section-title">
+
+                    <div class="section-number">
+                        01
+                    </div>
+
+                    <div>
+
+                        <h3>
+                            Sender Details
+                        </h3>
+
+                        <span>
+                            Person sending the parcel
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-grid">
+
+
+                    <div class="form-group">
+
+                        <label for="senderName">
+                            Full Name
+                        </label>
+
+                        <input
+                            type="text"
+                            id="senderName"
+                            name="sender_name"
+                            placeholder="Enter sender name"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="senderEmail">
+                            Email
+                        </label>
+
+                        <input
+                            type="email"
+                            id="senderEmail"
+                            name="sender_email"
+                            placeholder="sender@example.com"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="senderPhone">
+                            Phone
+                        </label>
+
+                        <input
+                            type="tel"
+                            id="senderPhone"
+                            name="sender_phone"
+                            placeholder="10-digit mobile number"
+                            maxlength="10"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group full-width">
+
+                        <label for="senderAddress">
+                            Address
+                        </label>
+
+                        <input
+                            type="text"
+                            id="senderAddress"
+                            name="sender_address"
+                            placeholder="Enter sender address"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- RECEIVER -->
+
+            <div class="form-section">
+
+                <div class="form-section-title">
+
+                    <div class="section-number">
+                        02
+                    </div>
+
+                    <div>
+
+                        <h3>
+                            Receiver Details
+                        </h3>
+
+                        <span>
+                            Person receiving the parcel
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-grid">
+
+
+                    <div class="form-group">
+
+                        <label for="receiverName">
+                            Full Name
+                        </label>
+
+                        <input
+                            type="text"
+                            id="receiverName"
+                            name="receiver_name"
+                            placeholder="Enter receiver name"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="receiverEmail">
+                            Email
+                        </label>
+
+                        <input
+                            type="email"
+                            id="receiverEmail"
+                            name="receiver_email"
+                            placeholder="receiver@example.com"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="receiverPhone">
+                            Phone
+                        </label>
+
+                        <input
+                            type="tel"
+                            id="receiverPhone"
+                            name="receiver_phone"
+                            placeholder="10-digit mobile number"
+                            maxlength="10"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group full-width">
+
+                        <label for="receiverAddress">
+                            Address
+                        </label>
+
+                        <input
+                            type="text"
+                            id="receiverAddress"
+                            name="receiver_address"
+                            placeholder="Enter receiver address"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ROUTE -->
+
+            <div class="form-section">
+
+                <div class="form-section-title">
+
+                    <div class="section-number">
+                        03
+                    </div>
+
+                    <div>
+
+                        <h3>
+                            Shipment Route
+                        </h3>
+
+                        <span>
+                            Select origin and destination branches
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-grid">
+
+
+                    <div class="form-group">
+
+                        <label for="originBranchId">
+                            Origin Branch
+                        </label>
+
+                        <select
+                            id="originBranchId"
+                            name="origin_branch_id"
+                            required
+                        >
+
+                            <option value="">
+                                Select origin branch
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="destinationBranchId">
+                            Destination Branch
+                        </label>
+
+                        <select
+                            id="destinationBranchId"
+                            name="destination_branch_id"
+                            required
+                        >
+
+                            <option value="">
+                                Select destination branch
+                            </option>
+
+                        </select>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- PARCEL -->
+
+            <div class="form-section">
+
+                <div class="form-section-title">
+
+                    <div class="section-number">
+                        04
+                    </div>
+
+                    <div>
+
+                        <h3>
+                            Parcel Information
+                        </h3>
+
+                        <span>
+                            Package weight, type and shipping cost
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-grid">
+
+
+                    <div class="form-group">
+
+                        <label for="parcelWeight">
+                            Weight (kg)
+                        </label>
+
+                        <input
+                            type="number"
+                            id="parcelWeight"
+                            name="weight"
+                            min="0.1"
+                            step="0.1"
+                            placeholder="e.g. 2.50"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="parcelType">
+                            Parcel Type
+                        </label>
+
+                        <select
+                            id="parcelType"
+                            name="parcel_type"
+                            required
+                        >
+
+                            <option value="">
+                                Select type
+                            </option>
+
+                            <option value="Documents">
+                                Documents
+                            </option>
+
+                            <option value="Electronics">
+                                Electronics
+                            </option>
+
+                            <option value="Clothing">
+                                Clothing
+                            </option>
+
+                            <option value="Food">
+                                Food
+                            </option>
+
+                            <option value="Fragile">
+                                Fragile
+                            </option>
+
+                            <option value="Other">
+                                Other
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="shippingCost">
+                            Shipping Cost (₹)
+                        </label>
+
+                        <input
+                            type="number"
+                            id="shippingCost"
+                            name="shipping_cost"
+                            min="0"
+                            step="0.01"
+                            placeholder="e.g. 450"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- MESSAGE -->
+
+            <div
+                id="parcelFormMessage"
+                class="form-message"
+            ></div>
+
+
+            <!-- ACTIONS -->
+
+            <div class="modal-actions">
+
+                <button
+                    type="button"
+                    id="cancelParcel"
+                    class="secondary-button"
+                >
+                    Cancel
+                </button>
+
+
+                <button
+                    type="submit"
+                    id="createParcelButton"
+                    class="primary-button"
+                >
+
+                    <i class="fa-solid fa-box"></i>
+
+                    Create Parcel
+
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     TOAST
+========================================================== -->
+
+<div
+    id="toast"
+    class="toast"
+>
+
+    <div class="toast-icon">
+
+        <i class="fa-solid fa-check"></i>
+
+    </div>
+
+
+    <div>
+
+        <strong id="toastTitle">
+            Success
+        </strong>
+
+        <span id="toastMessage">
+            Operation completed.
+        </span>
+
+    </div>
+
+</div>
+
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+</body>
+
+</html>

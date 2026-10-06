@@ -312,12 +312,12 @@
 
             <p class="nav-label">MAIN</p>
 
-            <a href="#" class="nav-item active">
+            <a href="#" id="navDashboard" class="nav-item active" data-view="dashboard">
                 <i class="fa-solid fa-chart-line"></i>
                 <span>Dashboard</span>
             </a>
 
-            <a href="#" class="nav-item">
+            <a href="#" id="navParcels" class="nav-item" data-view="parcels">
                 <i class="fa-solid fa-box-open"></i>
                 <span>Parcels</span>
             </a>
@@ -340,7 +340,7 @@
                 <span>Customers</span>
             </a>
 
-            <a href="#" class="nav-item">
+            <a href="#" id="navBranches" class="nav-item" data-view="branches">
                 <i class="fa-solid fa-building"></i>
                 <span>Branches</span>
             </a>
@@ -407,8 +407,8 @@
                 </button>
 
                 <div>
-                    <h2>Dashboard</h2>
-                    <p>Courier &amp; Parcel Tracking Management</p>
+                    <h2 id="topbarTitle">Dashboard</h2>
+                    <p id="topbarSubtitle">Courier &amp; Parcel Tracking Management</p>
                 </div>
 
             </div>
@@ -442,7 +442,7 @@
              DASHBOARD
         ================================================== -->
 
-        <section class="dashboard-content">
+        <section id="dashboardView" class="dashboard-content view-section">
 
 
             <!-- HERO -->
@@ -865,7 +865,7 @@
                         </div>
 
 
-                        <button class="secondary-button">
+                        <button id="viewAllParcelsButton" class="secondary-button">
                             View All
                         </button>
 
@@ -1065,6 +1065,271 @@
                     </div>
 
                 </section>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             PARCELS MANAGEMENT VIEW
+        ================================================== -->
+
+        <section id="parcelsView" class="dashboard-content view-section" style="display: none;">
+
+            <!-- PARCELS HEADER -->
+            <div class="panel parcels-header-panel">
+
+                <div class="parcels-header-info">
+                    <span class="eyebrow">
+                        DATABASE DIRECTORY
+                    </span>
+                    <h2>Parcels Management</h2>
+                    <p>View, search, and monitor all shipments booked in CourierX.</p>
+                </div>
+
+                <div class="parcels-header-actions">
+                    <button id="refreshParcelsButton" class="secondary-button">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Refresh</span>
+                    </button>
+
+                    <button id="parcelsNewButton" class="primary-button parcels-create-btn">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>New Parcel</span>
+                    </button>
+                </div>
+
+            </div>
+
+
+            <!-- SEARCH AND FILTER TOOLBAR -->
+            <div class="panel parcels-toolbar-panel">
+
+                <div class="parcels-toolbar">
+
+                    <div class="toolbar-search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input
+                            type="text"
+                            id="parcelsSearchInput"
+                            placeholder="Search by tracking number, sender, or receiver name..."
+                        >
+                    </div>
+
+                    <div class="toolbar-filters">
+                        <select id="parcelsStatusFilter" class="toolbar-select">
+                            <option value="">All Statuses</option>
+                            <option value="Pending">Pending</option>
+                            <option value="In Transit">In Transit</option>
+                            <option value="Out for Delivery">Out for Delivery</option>
+                            <option value="Delivered">Delivered</option>
+                        </select>
+
+                        <button id="clearParcelsSearch" class="secondary-button toolbar-clear-btn">
+                            Clear
+                        </button>
+                    </div>
+
+                </div>
+
+                <div class="toolbar-meta">
+                    <span id="parcelsCountDisplay">Loading parcels...</span>
+                    <span class="toolbar-hint">
+                        <i class="fa-solid fa-circle-info"></i>
+                        Click any parcel row or action button to view complete details
+                    </span>
+                </div>
+
+            </div>
+
+
+            <!-- PARCELS TABLE -->
+            <div class="panel">
+
+                <div class="table-wrapper">
+
+                    <table id="parcelsTable">
+
+                        <thead>
+                            <tr>
+                                <th>Tracking ID</th>
+                                <th>Sender</th>
+                                <th>Receiver</th>
+                                <th>Route</th>
+                                <th>Type / Weight</th>
+                                <th>Shipping Cost</th>
+                                <th>Status</th>
+                                <th>Booking Date</th>
+                                <th style="text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="parcelsTableBody">
+                            <tr>
+                                <td colspan="9" class="empty-state">
+                                    Loading parcel records...
+                                </td>
+                            </tr>
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             BRANCHES MANAGEMENT VIEW
+        ================================================== -->
+
+        <section id="branchesView" class="dashboard-content view-section" style="display: none;">
+
+            <!-- BRANCHES HEADER -->
+            <div class="panel branches-header-panel">
+
+                <div class="branches-header-info">
+                    <span class="eyebrow">
+                        NETWORK INFRASTRUCTURE
+                    </span>
+                    <h2>BRANCH MANAGEMENT</h2>
+                    <p>Manage courier branches, locations, and operational status.</p>
+                </div>
+
+                <div class="branches-header-actions">
+                    <button id="refreshBranchesButton" class="secondary-button" title="Refresh branch records">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Refresh</span>
+                    </button>
+
+                    <button id="branchesNewButton" class="primary-button branches-create-btn">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>New Branch</span>
+                    </button>
+                </div>
+
+            </div>
+
+
+            <!-- BRANCH STATISTICS -->
+            <div class="branch-stats-grid">
+
+                <div class="panel branch-stat-card">
+                    <div class="stat-icon-wrap stat-icon-blue">
+                        <i class="fa-solid fa-building"></i>
+                    </div>
+                    <div>
+                        <span class="branch-stat-label">Total Branches</span>
+                        <h3 id="totalBranchesCount" class="branch-stat-value">...</h3>
+                    </div>
+                </div>
+
+                <div class="panel branch-stat-card">
+                    <div class="stat-icon-wrap stat-icon-green">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+                    <div>
+                        <span class="branch-stat-label">Active Branches</span>
+                        <h3 id="activeBranchesCount" class="branch-stat-value">...</h3>
+                    </div>
+                </div>
+
+                <div class="panel branch-stat-card">
+                    <div class="stat-icon-wrap stat-icon-amber">
+                        <i class="fa-solid fa-circle-pause"></i>
+                    </div>
+                    <div>
+                        <span class="branch-stat-label">Inactive Branches</span>
+                        <h3 id="inactiveBranchesCount" class="branch-stat-value">...</h3>
+                    </div>
+                </div>
+
+                <div class="panel branch-stat-card">
+                    <div class="stat-icon-wrap stat-icon-cyan">
+                        <i class="fa-solid fa-map-location-dot"></i>
+                    </div>
+                    <div>
+                        <span class="branch-stat-label">Cities Covered</span>
+                        <h3 id="citiesCoveredCount" class="branch-stat-value">...</h3>
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- SEARCH AND FILTER TOOLBAR -->
+            <div class="panel branches-toolbar-panel">
+
+                <div class="branches-toolbar">
+
+                    <div class="toolbar-search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input
+                            type="text"
+                            id="branchesSearchInput"
+                            placeholder="Search branches..."
+                        >
+                    </div>
+
+                    <div class="toolbar-filters">
+                        <select id="branchesStatusFilter" class="toolbar-select">
+                            <option value="">All</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                        </select>
+
+                        <button id="clearBranchesSearch" class="secondary-button toolbar-clear-btn">
+                            Clear
+                        </button>
+                    </div>
+
+                </div>
+
+                <div class="toolbar-meta">
+                    <span id="branchesCountDisplay">Loading branches...</span>
+                    <span class="toolbar-hint">
+                        <i class="fa-solid fa-circle-info"></i>
+                        Click any branch row or action buttons to view, edit, or manage
+                    </span>
+                </div>
+
+            </div>
+
+
+            <!-- BRANCH TABLE -->
+            <div class="panel">
+
+                <div class="table-wrapper">
+
+                    <table id="branchesTable">
+
+                        <thead>
+                            <tr>
+                                <th>Branch ID</th>
+                                <th>Branch Name</th>
+                                <th>City</th>
+                                <th>State</th>
+                                <th>Phone</th>
+                                <th>Manager</th>
+                                <th>Status</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="branchesTableBody">
+                            <tr>
+                                <td colspan="8" class="empty-state">
+                                    Loading branch records...
+                                </td>
+                            </tr>
+                        </tbody>
+
+                    </table>
+
+                </div>
 
             </div>
 
@@ -1548,6 +1813,361 @@
             </div>
 
         </form>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     BRANCH MODAL (CREATE / EDIT)
+========================================================== -->
+
+<div
+    id="branchModal"
+    class="modal-overlay"
+    aria-hidden="true"
+>
+
+    <div class="modal-card branch-form-card">
+
+        <div class="modal-header">
+
+            <div>
+                <span class="eyebrow" id="branchModalEyebrow">
+                    NETWORK INFRASTRUCTURE
+                </span>
+                <h2 id="branchModalTitle">
+                    Create New Branch
+                </h2>
+                <p id="branchModalSubtitle">
+                    Enter courier branch location and contact details.
+                </p>
+            </div>
+
+            <button
+                id="closeBranchModal"
+                class="modal-close"
+                type="button"
+            >
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </div>
+
+        <form id="branchForm">
+
+            <input type="hidden" id="branchFormId" value="">
+
+            <div class="form-section">
+
+                <div class="form-grid">
+
+                    <div class="form-group full-width">
+                        <label for="branchNameInput">
+                            Branch Name <span class="required">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="branchNameInput"
+                            placeholder="e.g. South Bangalore Delivery Hub"
+                            required
+                            maxlength="100"
+                        >
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="branchAddressInput">
+                            Address <span class="required">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="branchAddressInput"
+                            placeholder="e.g. 42 Industrial Area, Koramangala"
+                            required
+                            maxlength="255"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="branchCityInput">
+                            City <span class="required">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="branchCityInput"
+                            placeholder="e.g. Bengaluru"
+                            required
+                            maxlength="100"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="branchStateInput">
+                            State <span class="required">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="branchStateInput"
+                            placeholder="e.g. Karnataka"
+                            required
+                            maxlength="100"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="branchPhoneInput">
+                            Phone <span class="required">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="branchPhoneInput"
+                            placeholder="e.g. 08041234567"
+                            required
+                            maxlength="15"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="branchStatusInput">
+                            Status <span class="required">*</span>
+                        </label>
+                        <select id="branchStatusInput" class="form-select" required>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
+                        </select>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div id="branchFormMessage" class="form-message" style="display: none;"></div>
+
+            <div class="modal-actions">
+
+                <button
+                    type="button"
+                    id="cancelBranchModal"
+                    class="secondary-button"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="submit"
+                    id="saveBranchButton"
+                    class="primary-button"
+                >
+                    <i class="fa-solid fa-check"></i>
+                    <span id="saveBranchButtonText">Save Branch</span>
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     BRANCH DETAILS MODAL
+========================================================== -->
+
+<div
+    id="branchDetailsModal"
+    class="modal-overlay"
+    aria-hidden="true"
+>
+
+    <div class="modal-card branch-details-card">
+
+        <div class="modal-header">
+
+            <div>
+                <span class="eyebrow">
+                    BRANCH DETAILS
+                </span>
+                <h2 id="detailBranchName">
+                    Branch Name
+                </h2>
+                <p id="detailBranchMeta">
+                    Branch ID: #---
+                </p>
+            </div>
+
+            <button
+                id="closeBranchDetailsModal"
+                class="modal-close"
+                type="button"
+            >
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </div>
+
+        <div class="branch-modal-body">
+
+            <div class="branch-info-grid">
+
+                <div class="branch-info-card">
+                    <span class="info-card-label">Operational Status</span>
+                    <div id="detailBranchStatus" class="info-card-value">...</div>
+                </div>
+
+                <div class="branch-info-card">
+                    <span class="info-card-label">Contact Phone</span>
+                    <div id="detailBranchPhone" class="info-card-value">...</div>
+                </div>
+
+                <div class="branch-info-card">
+                    <span class="info-card-label">City &amp; State</span>
+                    <div id="detailBranchLocation" class="info-card-value">...</div>
+                </div>
+
+                <div class="branch-info-card">
+                    <span class="info-card-label">Street Address</span>
+                    <div id="detailBranchAddress" class="info-card-value">...</div>
+                </div>
+
+                <div class="branch-info-card">
+                    <span class="info-card-label">Branch Officer / Manager</span>
+                    <div id="detailBranchManager" class="info-card-value">...</div>
+                    <span id="detailBranchManagerEmail" class="cell-subtext">...</span>
+                </div>
+
+                <div class="branch-info-card">
+                    <span class="info-card-label">Parcel Operations</span>
+                    <div class="direction-counts">
+                        <span class="tag-pill outgoing">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            Outgoing: <strong id="detailBranchOutgoing">0</strong>
+                        </span>
+                        <span class="tag-pill incoming">
+                            <i class="fa-solid fa-arrow-down-left-and-up-right-to-center"></i>
+                            Incoming: <strong id="detailBranchIncoming">0</strong>
+                        </span>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="recent-branch-parcels-wrap">
+                <h4>Recent Linked Parcels</h4>
+                <div class="table-wrapper">
+                    <table class="subtable">
+                        <thead>
+                            <tr>
+                                <th>Tracking Number</th>
+                                <th>Direction</th>
+                                <th>Status</th>
+                                <th>Type / Weight</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailBranchParcelsTable">
+                            <tr>
+                                <td colspan="5" class="empty-state">No linked parcel records</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="modal-actions">
+
+            <button
+                type="button"
+                id="closeBranchDetailsButton"
+                class="secondary-button"
+            >
+                Close
+            </button>
+
+            <button
+                type="button"
+                id="editBranchFromDetailsButton"
+                class="primary-button"
+            >
+                <i class="fa-solid fa-pen-to-square"></i>
+                <span>Edit Branch</span>
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     BRANCH CONFIRM MODAL (SAFE DEACTIVATE / DELETE)
+========================================================== -->
+
+<div
+    id="branchConfirmModal"
+    class="modal-overlay"
+    aria-hidden="true"
+>
+
+    <div class="modal-card branch-confirm-card">
+
+        <div class="modal-header">
+
+            <div>
+                <span class="eyebrow" id="confirmModalEyebrow">
+                    SAFETY CONFIRMATION
+                </span>
+                <h2 id="confirmModalTitle">
+                    Deactivate Branch
+                </h2>
+            </div>
+
+            <button
+                id="closeBranchConfirmModal"
+                class="modal-close"
+                type="button"
+            >
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </div>
+
+        <div class="confirm-content-box">
+
+            <div id="confirmModalIcon" class="confirm-icon-wrap warning">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+
+            <p id="confirmModalMessage" class="confirm-message-text">
+                This branch is linked to existing parcels and cannot be safely deleted. Deactivate it instead?
+            </p>
+
+        </div>
+
+        <div class="modal-actions">
+
+            <button
+                type="button"
+                id="cancelConfirmModal"
+                class="secondary-button"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                id="executeConfirmModal"
+                class="primary-button warning-action-btn"
+            >
+                <span id="confirmButtonText">Deactivate Branch</span>
+            </button>
+
+        </div>
 
     </div>
 

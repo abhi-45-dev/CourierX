@@ -53,11 +53,78 @@ def get_customers():
 
 
 # =========================================================
-# BRANCHES
+# BRANCHES MANAGEMENT API
 # =========================================================
 
 @app.route("/api/branches", methods=["GET"])
 def get_branches():
+
+    search_query = request.args.get("search", "").strip()
+    status_filter = request.args.get("status", "").strip()
+    active_only = request.args.get("active_only", "").strip().lower() in ("true", "1")
+
+    db = get_db_connection()
+
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        conditions = []
+        params = []
+
+        if search_query:
+            conditions.append("""(
+                b.branch_name LIKE %s
+                OR b.city LIKE %s
+                OR b.state LIKE %s
+                OR b.phone LIKE %s
+                OR b.address LIKE %s
+                OR CAST(b.branch_id AS CHAR) = %s
+            )""")
+            search_param = f"%{search_query}%"
+            params.extend([search_param, search_param, search_param, search_param, search_param, search_query])
+
+        if status_filter in ["Active", "Inactive"]:
+            conditions.append("b.status = %s")
+            params.append(status_filter)
+        elif active_only:
+            conditions.append("b.status = 'Active'")
+
+        where_clause = ""
+        if conditions:
+            where_clause = f"WHERE {' AND '.join(conditions)}"
+
+        query = f"""
+            SELECT
+                b.branch_id,
+                b.branch_name,
+                b.branch_name AS name,
+                b.city,
+                b.state,
+                b.address,
+                b.phone,
+                b.status,
+                e.name AS manager_name,
+                (SELECT COUNT(*) FROM Parcel WHERE origin_branch_id = b.branch_id) AS outgoing_parcels,
+                (SELECT COUNT(*) FROM Parcel WHERE destination_branch_id = b.branch_id) AS incoming_parcels
+            FROM Branch b
+            LEFT JOIN Employee e
+                ON b.branch_id = e.branch_id
+            {where_clause}
+            ORDER BY b.branch_id ASC
+        """
+
+        cursor.execute(query, tuple(params))
+        branches = cursor.fetchall()
+
+        return jsonify(branches)
+
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/branches/stats", methods=["GET"])
+def get_branch_stats():
 
     db = get_db_connection()
 
@@ -66,17 +133,356 @@ def get_branches():
 
         cursor.execute("""
             SELECT
-                branch_id,
-                branch_name AS name,
-                city,
-                state,
-                address,
-                phone
+                COUNT(*) AS total_branches,
+                COALESCE(SUM(CASE WHEN status = 'Active' THEN 1 ELSE 0 END), 0) AS active_branches,
+                COALESCE(SUM(CASE WHEN status = 'Inactive' THEN 1 ELSE 0 END), 0) AS inactive_branches,
+                COUNT(DISTINCT city) AS cities_covered
             FROM Branch
-            ORDER BY branch_id
         """)
 
-        return jsonify(cursor.fetchall())
+        stats = cursor.fetchone()
+
+        return jsonify({
+            "total_branches": int(stats["total_branches"] or 0),
+            "active_branches": int(stats["active_branches"] or 0),
+            "inactive_branches": int(stats["inactive_branches"] or 0),
+            "cities_covered": int(stats["cities_covered"] or 0)
+        })
+
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/branches/<int:branch_id>", methods=["GET"])
+def get_branch(branch_id):
+
+    db = get_db_connection()
+
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT
+                b.branch_id,
+                b.branch_name,
+                b.branch_name AS name,
+                b.city,
+                b.state,
+                b.address,
+                b.phone,
+                b.status,
+                e.employee_id AS manager_id,
+                e.name AS manager_name,
+                e.email AS manager_email,
+                e.phone AS manager_phone,
+                e.role AS manager_role,
+                (SELECT COUNT(*) FROM Parcel WHERE origin_branch_id = b.branch_id) AS outgoing_parcels,
+                (SELECT COUNT(*) FROM Parcel WHERE destination_branch_id = b.branch_id) AS incoming_parcels
+            FROM Branch b
+            LEFT JOIN Employee e
+                ON b.branch_id = e.branch_id
+            WHERE b.branch_id = %s
+        """, (branch_id,))
+
+        branch = cursor.fetchone()
+
+        if branch is None:
+            return jsonify({"error": "Branch not found"}), 404
+
+        # Recent parcels linked to this branch
+        cursor.execute("""
+            SELECT
+                p.parcel_id,
+                p.tracking_number,
+                p.status,
+                p.parcel_type,
+                p.weight,
+                p.shipping_cost,
+                DATE_FORMAT(p.booking_date, '%Y-%m-%d %H:%i') AS booking_date,
+                CASE
+                    WHEN p.origin_branch_id = %s THEN 'Outgoing'
+                    ELSE 'Incoming'
+                END AS direction
+            FROM Parcel p
+            WHERE p.origin_branch_id = %s OR p.destination_branch_id = %s
+            ORDER BY p.booking_date DESC
+            LIMIT 5
+        """, (branch_id, branch_id, branch_id))
+
+        branch["recent_parcels"] = cursor.fetchall()
+
+        return jsonify(branch)
+
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/branches", methods=["POST"])
+def create_branch():
+
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    branch_name = (data.get("branch_name") or "").strip()
+    city = (data.get("city") or "").strip()
+    state = (data.get("state") or "").strip()
+    address = (data.get("address") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    status = (data.get("status") or "Active").strip()
+
+    if not branch_name:
+        return jsonify({"error": "Branch name is required"}), 400
+
+    if not city:
+        return jsonify({"error": "City is required"}), 400
+
+    if not state:
+        return jsonify({"error": "State is required"}), 400
+
+    if not address:
+        return jsonify({"error": "Address is required"}), 400
+
+    if not phone:
+        return jsonify({"error": "Phone number is required"}), 400
+
+    if len(phone) < 5 or len(phone) > 15:
+        return jsonify({"error": "Phone number must be between 5 and 15 characters"}), 400
+
+    if status not in ["Active", "Inactive"]:
+        status = "Active"
+
+    db = get_db_connection()
+
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        # Check duplicate
+        cursor.execute("""
+            SELECT branch_id
+            FROM Branch
+            WHERE LOWER(branch_name) = LOWER(%s) AND LOWER(city) = LOWER(%s)
+        """, (branch_name, city))
+
+        if cursor.fetchone():
+            return jsonify({"error": "A branch with this name already exists in this city"}), 409
+
+        cursor.execute("""
+            INSERT INTO Branch (branch_name, city, state, address, phone, status)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (branch_name, city, state, address, phone, status))
+
+        db.commit()
+        new_branch_id = cursor.lastrowid
+
+        return jsonify({
+            "message": "Branch created successfully",
+            "branch": {
+                "branch_id": new_branch_id,
+                "branch_name": branch_name,
+                "city": city,
+                "state": state,
+                "address": address,
+                "phone": phone,
+                "status": status
+            }
+        }), 201
+
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/branches/<int:branch_id>", methods=["PUT"])
+def update_branch(branch_id):
+
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    branch_name = (data.get("branch_name") or "").strip()
+    city = (data.get("city") or "").strip()
+    state = (data.get("state") or "").strip()
+    address = (data.get("address") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    status = (data.get("status") or "Active").strip()
+
+    if not branch_name:
+        return jsonify({"error": "Branch name is required"}), 400
+
+    if not city:
+        return jsonify({"error": "City is required"}), 400
+
+    if not state:
+        return jsonify({"error": "State is required"}), 400
+
+    if not address:
+        return jsonify({"error": "Address is required"}), 400
+
+    if not phone:
+        return jsonify({"error": "Phone number is required"}), 400
+
+    if len(phone) < 5 or len(phone) > 15:
+        return jsonify({"error": "Phone number must be between 5 and 15 characters"}), 400
+
+    if status not in ["Active", "Inactive"]:
+        status = "Active"
+
+    db = get_db_connection()
+
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute("SELECT branch_id FROM Branch WHERE branch_id = %s", (branch_id,))
+        if cursor.fetchone() is None:
+            return jsonify({"error": "Branch not found"}), 404
+
+        # Duplicate check excluding this branch
+        cursor.execute("""
+            SELECT branch_id
+            FROM Branch
+            WHERE LOWER(branch_name) = LOWER(%s) AND LOWER(city) = LOWER(%s) AND branch_id != %s
+        """, (branch_name, city, branch_id))
+
+        if cursor.fetchone():
+            return jsonify({"error": "Another branch with this name already exists in this city"}), 409
+
+        cursor.execute("""
+            UPDATE Branch
+            SET branch_name = %s, city = %s, state = %s, address = %s, phone = %s, status = %s
+            WHERE branch_id = %s
+        """, (branch_name, city, state, address, phone, status, branch_id))
+
+        db.commit()
+
+        return jsonify({
+            "message": "Branch updated successfully",
+            "branch": {
+                "branch_id": branch_id,
+                "branch_name": branch_name,
+                "city": city,
+                "state": state,
+                "address": address,
+                "phone": phone,
+                "status": status
+            }
+        })
+
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/branches/<int:branch_id>/status", methods=["PATCH"])
+def update_branch_status(branch_id):
+
+    data = request.get_json() or {}
+    new_status = data.get("status", "").strip()
+
+    if new_status not in ["Active", "Inactive"]:
+        return jsonify({"error": "Status must be 'Active' or 'Inactive'"}), 400
+
+    db = get_db_connection()
+
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute("SELECT branch_id FROM Branch WHERE branch_id = %s", (branch_id,))
+        if cursor.fetchone() is None:
+            return jsonify({"error": "Branch not found"}), 404
+
+        cursor.execute("""
+            UPDATE Branch
+            SET status = %s
+            WHERE branch_id = %s
+        """, (new_status, branch_id))
+
+        db.commit()
+
+        return jsonify({
+            "message": f"Branch status changed to {new_status}",
+            "branch_id": branch_id,
+            "status": new_status
+        })
+
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/branches/<int:branch_id>", methods=["DELETE"])
+def delete_branch(branch_id):
+
+    force_deactivate = (
+        request.args.get("deactivate", "").strip().lower() in ("true", "1")
+        or (request.is_json and request.get_json(silent=True) and request.get_json(silent=True).get("deactivate"))
+    )
+
+    db = get_db_connection()
+
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute("SELECT branch_id, branch_name, status FROM Branch WHERE branch_id = %s", (branch_id,))
+        branch = cursor.fetchone()
+        if branch is None:
+            return jsonify({"error": "Branch not found"}), 404
+
+        # Check foreign-key relationships
+        cursor.execute("""
+            SELECT
+                (SELECT COUNT(*) FROM Parcel WHERE origin_branch_id = %s OR destination_branch_id = %s) AS parcel_refs,
+                (SELECT COUNT(*) FROM Employee WHERE branch_id = %s) AS employee_refs,
+                (SELECT COUNT(*) FROM Vehicle WHERE branch_id = %s) AS vehicle_refs,
+                (SELECT COUNT(*) FROM Tracking_Update WHERE branch_id = %s) AS tracking_refs
+        """, (branch_id, branch_id, branch_id, branch_id, branch_id))
+
+        ref_counts = cursor.fetchone()
+        parcel_refs = int(ref_counts["parcel_refs"] or 0)
+        employee_refs = int(ref_counts["employee_refs"] or 0)
+        vehicle_refs = int(ref_counts["vehicle_refs"] or 0)
+        tracking_refs = int(ref_counts["tracking_refs"] or 0)
+        total_refs = parcel_refs + employee_refs + vehicle_refs + tracking_refs
+
+        if total_refs > 0:
+            if force_deactivate:
+                cursor.execute("UPDATE Branch SET status = 'Inactive' WHERE branch_id = %s", (branch_id,))
+                db.commit()
+                return jsonify({
+                    "message": "Branch deactivated safely. Existing parcel and tracking references remain intact.",
+                    "can_delete": false,
+                    "deactivated": True,
+                    "deleted": False,
+                    "status": "Inactive"
+                })
+
+            # If not explicitly deactivating, return 409 conflict with clear message
+            return jsonify({
+                "can_delete": False,
+                "deactivated": False,
+                "deleted": False,
+                "error": "This branch is linked to existing parcels or operational records and cannot be safely deleted. Deactivate it instead?",
+                "parcel_refs": parcel_refs,
+                "employee_refs": employee_refs,
+                "vehicle_refs": vehicle_refs,
+                "tracking_refs": tracking_refs,
+                "total_refs": total_refs
+            }), 409
+
+        # No references, safe to hard delete
+        cursor.execute("DELETE FROM Branch WHERE branch_id = %s", (branch_id,))
+        db.commit()
+
+        return jsonify({
+            "message": "Branch deleted successfully",
+            "can_delete": True,
+            "deleted": True,
+            "deactivated": False
+        })
 
     finally:
         cursor.close()
@@ -184,12 +590,35 @@ def dashboard():
 @app.route("/api/parcels", methods=["GET"])
 def get_parcels():
 
+    search_query = request.args.get("search", "").strip()
+    status_filter = request.args.get("status", "").strip()
+
     db = get_db_connection()
 
     try:
         cursor = db.cursor(dictionary=True)
 
-        cursor.execute("""
+        conditions = []
+        params = []
+
+        if search_query:
+            conditions.append("""(
+                p.tracking_number LIKE %s
+                OR sender.name LIKE %s
+                OR receiver.name LIKE %s
+            )""")
+            search_param = f"%{search_query}%"
+            params.extend([search_param, search_param, search_param])
+
+        if status_filter in ["Pending", "In Transit", "Out for Delivery", "Delivered"]:
+            conditions.append("p.status = %s")
+            params.append(status_filter)
+
+        where_clause = ""
+        if conditions:
+            where_clause = f"WHERE {' AND '.join(conditions)}"
+
+        query = f"""
             SELECT
 
                 p.parcel_id,
@@ -197,10 +626,17 @@ def get_parcels():
 
                 sender.name
                     AS sender_name,
+                sender.phone
+                    AS sender_phone,
+                sender.email
+                    AS sender_email,
 
                 receiver.name
                     AS receiver_name,
-
+                receiver.phone
+                    AS receiver_phone,
+                receiver.email
+                    AS receiver_email,
 
                 origin.branch_name
                     AS origin_branch,
@@ -211,7 +647,6 @@ def get_parcels():
                 origin.state
                     AS origin_state,
 
-
                 destination.branch_name
                     AS destination_branch,
 
@@ -221,46 +656,41 @@ def get_parcels():
                 destination.state
                     AS destination_state,
 
-
                 p.weight,
                 p.parcel_type,
                 p.shipping_cost,
                 p.status,
-
 
                 DATE_FORMAT(
                     p.booking_date,
                     '%Y-%m-%d %H:%i'
                 ) AS booking_date
 
-
             FROM Parcel p
-
 
             JOIN Customer sender
                 ON p.sender_id =
                    sender.customer_id
 
-
             JOIN Customer receiver
                 ON p.receiver_id =
                    receiver.customer_id
-
 
             JOIN Branch origin
                 ON p.origin_branch_id =
                    origin.branch_id
 
-
             JOIN Branch destination
                 ON p.destination_branch_id =
                    destination.branch_id
 
+            {where_clause}
 
             ORDER BY
                 p.booking_date DESC
-        """)
+        """
 
+        cursor.execute(query, tuple(params))
         parcels = cursor.fetchall()
 
         return jsonify(parcels)
@@ -703,19 +1133,27 @@ def create_parcel():
         # -------------------------------------------------
 
         cursor.execute("""
-            SELECT branch_id
+            SELECT branch_id, status
             FROM Branch
             WHERE branch_id = %s
         """, (
             origin_branch_id,
         ))
 
+        origin_branch = cursor.fetchone()
 
-        if cursor.fetchone() is None:
+        if origin_branch is None:
 
             return jsonify({
                 "error":
                     "Origin branch does not exist"
+            }), 400
+
+        if origin_branch.get("status") == "Inactive":
+
+            return jsonify({
+                "error":
+                    "Selected origin branch is inactive and cannot accept new parcels"
             }), 400
 
 
@@ -724,19 +1162,27 @@ def create_parcel():
         # -------------------------------------------------
 
         cursor.execute("""
-            SELECT branch_id
+            SELECT branch_id, status
             FROM Branch
             WHERE branch_id = %s
         """, (
             destination_branch_id,
         ))
 
+        dest_branch = cursor.fetchone()
 
-        if cursor.fetchone() is None:
+        if dest_branch is None:
 
             return jsonify({
                 "error":
                     "Destination branch does not exist"
+            }), 400
+
+        if dest_branch.get("status") == "Inactive":
+
+            return jsonify({
+                "error":
+                    "Selected destination branch is inactive and cannot accept new parcels"
             }), 400
 
 

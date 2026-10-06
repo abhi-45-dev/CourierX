@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS Branch (
     city VARCHAR(100) NOT NULL,
     state VARCHAR(100) NOT NULL,
     address VARCHAR(255) NOT NULL,
-    phone VARCHAR(15) NOT NULL
+    phone VARCHAR(15) NOT NULL,
+    status ENUM('Active', 'Inactive') DEFAULT 'Active'
 );
 
 CREATE TABLE IF NOT EXISTS Employee (

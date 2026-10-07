@@ -322,7 +322,7 @@
                 <span>Parcels</span>
             </a>
 
-            <a href="#" class="nav-item">
+            <a href="#" id="navShipments" class="nav-item" data-view="shipments">
                 <i class="fa-solid fa-truck-fast"></i>
                 <span>Shipments</span>
             </a>
@@ -350,7 +350,7 @@
                 <span>Employees</span>
             </a>
 
-            <a href="#" class="nav-item">
+            <a href="#" id="navVehicles" class="nav-item" data-view="vehicles">
                 <i class="fa-solid fa-car-side"></i>
                 <span>Vehicles</span>
             </a>
@@ -1183,6 +1183,172 @@
 
 
         <!-- =================================================
+             SHIPMENTS MANAGEMENT VIEW
+        ================================================== -->
+
+        <section id="shipmentsView" class="dashboard-content view-section" style="display: none;">
+
+            <!-- SHIPMENTS HEADER -->
+            <div class="panel shipments-header-panel">
+
+                <div class="shipments-header-info">
+                    <span class="eyebrow">
+                        FLEET &amp; DISPATCH
+                    </span>
+                    <h2>SHIPMENTS</h2>
+                    <p>Manage shipments, routes, delivery progress, and operational status.</p>
+                </div>
+
+                <div class="shipments-header-actions">
+                    <button id="refreshShipmentsButton" class="secondary-button" title="Refresh shipment records">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Refresh</span>
+                    </button>
+                    <button id="shipmentsAssignButton" class="primary-button" title="Assign vehicle and employee to a parcel">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Assign Shipment</span>
+                    </button>
+                </div>
+
+            </div>
+
+
+            <!-- SHIPMENT STATISTICS -->
+            <div class="shipment-stats-grid">
+
+                <div class="panel shipment-stat-card">
+                    <div class="stat-icon-wrap stat-icon-blue">
+                        <i class="fa-solid fa-truck-fast"></i>
+                    </div>
+                    <div>
+                        <span class="shipment-stat-label">Total Shipments</span>
+                        <h3 id="totalShipmentsCount" class="shipment-stat-value">...</h3>
+                    </div>
+                </div>
+
+                <div class="panel shipment-stat-card">
+                    <div class="stat-icon-wrap stat-icon-amber">
+                        <i class="fa-solid fa-clock"></i>
+                    </div>
+                    <div>
+                        <span class="shipment-stat-label">Pending</span>
+                        <h3 id="pendingShipmentsCount" class="shipment-stat-value">...</h3>
+                    </div>
+                </div>
+
+                <div class="panel shipment-stat-card">
+                    <div class="stat-icon-wrap stat-icon-purple">
+                        <i class="fa-solid fa-route"></i>
+                    </div>
+                    <div>
+                        <span class="shipment-stat-label">In Transit</span>
+                        <h3 id="inTransitShipmentsCount" class="shipment-stat-value">...</h3>
+                    </div>
+                </div>
+
+                <div class="panel shipment-stat-card">
+                    <div class="stat-icon-wrap stat-icon-cyan">
+                        <i class="fa-solid fa-truck-ramp-box"></i>
+                    </div>
+                    <div>
+                        <span class="shipment-stat-label">Out for Delivery</span>
+                        <h3 id="outForDeliveryShipmentsCount" class="shipment-stat-value">...</h3>
+                    </div>
+                </div>
+
+                <div class="panel shipment-stat-card">
+                    <div class="stat-icon-wrap stat-icon-green">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+                    <div>
+                        <span class="shipment-stat-label">Delivered</span>
+                        <h3 id="deliveredShipmentsCount" class="shipment-stat-value">...</h3>
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- SEARCH AND FILTER TOOLBAR -->
+            <div class="panel shipments-toolbar-panel">
+
+                <div class="shipments-toolbar">
+
+                    <div class="toolbar-search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input
+                            type="text"
+                            id="shipmentsSearchInput"
+                            placeholder="Search by shipment ID, tracking number, sender, receiver, route..."
+                        >
+                    </div>
+
+                    <div class="toolbar-filters">
+                        <select id="shipmentsStatusFilter" class="toolbar-select">
+                            <option value="">All</option>
+                            <option value="Pending">Pending</option>
+                            <option value="In Transit">In Transit</option>
+                            <option value="Out for Delivery">Out for Delivery</option>
+                            <option value="Delivered">Delivered</option>
+                        </select>
+
+                        <button id="clearShipmentsSearch" class="secondary-button toolbar-clear-btn">
+                            Clear
+                        </button>
+                    </div>
+
+                </div>
+
+                <div class="toolbar-meta">
+                    <span id="shipmentsCountDisplay">Loading shipments...</span>
+                    <span class="toolbar-hint">
+                        <i class="fa-solid fa-circle-info"></i>
+                        Click any shipment row or action button to view complete details
+                    </span>
+                </div>
+
+            </div>
+
+
+            <!-- SHIPMENT TABLE -->
+            <div class="panel">
+
+                <div class="table-wrapper">
+
+                    <table id="shipmentsTable">
+
+                        <thead>
+                            <tr>
+                                <th>Shipment ID</th>
+                                <th>Tracking ID</th>
+                                <th>Sender</th>
+                                <th>Receiver</th>
+                                <th>Route</th>
+                                <th>Current Location</th>
+                                <th>Shipment Date</th>
+                                <th>Status</th>
+                                <th style="text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="shipmentsTableBody">
+                            <tr>
+                                <td colspan="9" class="empty-state">
+                                    Loading shipment records...
+                                </td>
+                            </tr>
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
              BRANCHES MANAGEMENT VIEW
         ================================================== -->
 
@@ -1323,6 +1489,166 @@
                             <tr>
                                 <td colspan="8" class="empty-state">
                                     Loading branch records...
+                                </td>
+                            </tr>
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             VEHICLES MANAGEMENT VIEW
+        ================================================== -->
+
+        <section id="vehiclesView" class="dashboard-content view-section" style="display: none;">
+
+            <!-- VEHICLES HEADER -->
+            <div class="panel vehicles-header-panel">
+
+                <div class="vehicles-header-info">
+                    <span class="eyebrow">
+                        FLEET LOGISTICS
+                    </span>
+                    <h2>VEHICLES</h2>
+                    <p>Monitor delivery vehicles, fleet capacity, and branch assignments.</p>
+                </div>
+
+                <div class="vehicles-header-actions">
+                    <button id="refreshVehiclesButton" class="secondary-button" title="Refresh vehicle records">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Refresh</span>
+                    </button>
+                </div>
+
+            </div>
+
+
+            <!-- VEHICLE STATISTICS -->
+            <div class="vehicle-stats-grid">
+
+                <div class="panel vehicle-stat-card">
+                    <div class="stat-icon-wrap stat-icon-blue">
+                        <i class="fa-solid fa-truck"></i>
+                    </div>
+                    <div>
+                        <span class="vehicle-stat-label">Total Fleet</span>
+                        <h3 id="totalVehiclesCount" class="vehicle-stat-value">...</h3>
+                    </div>
+                </div>
+
+                <div class="panel vehicle-stat-card">
+                    <div class="stat-icon-wrap stat-icon-green">
+                        <i class="fa-solid fa-circle-check"></i>
+                    </div>
+                    <div>
+                        <span class="vehicle-stat-label">Available</span>
+                        <h3 id="availableVehiclesCount" class="vehicle-stat-value">...</h3>
+                    </div>
+                </div>
+
+                <div class="panel vehicle-stat-card">
+                    <div class="stat-icon-wrap stat-icon-amber">
+                        <i class="fa-solid fa-route"></i>
+                    </div>
+                    <div>
+                        <span class="vehicle-stat-label">In Service</span>
+                        <h3 id="inServiceVehiclesCount" class="vehicle-stat-value">...</h3>
+                    </div>
+                </div>
+
+                <div class="panel vehicle-stat-card">
+                    <div class="stat-icon-wrap stat-icon-cyan">
+                        <i class="fa-solid fa-weight-hanging"></i>
+                    </div>
+                    <div>
+                        <span class="vehicle-stat-label">Total Capacity</span>
+                        <h3 id="fleetCapacityCount" class="vehicle-stat-value">...</h3>
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- SEARCH AND FILTER TOOLBAR -->
+            <div class="panel vehicles-toolbar-panel">
+
+                <div class="vehicles-toolbar">
+
+                    <div class="toolbar-search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input
+                            type="text"
+                            id="vehiclesSearchInput"
+                            placeholder="Search by registration number, type, branch, city..."
+                        >
+                    </div>
+
+                    <div class="toolbar-filters">
+                        <select id="vehiclesTypeFilter" class="toolbar-select">
+                            <option value="">All Types</option>
+                            <option value="Heavy Freight Truck">Heavy Freight Truck</option>
+                            <option value="Express Cargo Van">Express Cargo Van</option>
+                            <option value="Electric Delivery Van">Electric Delivery Van</option>
+                            <option value="Regional Cargo Van">Regional Cargo Van</option>
+                            <option value="Delivery Van">Delivery Van</option>
+                            <option value="Distribution Hauler">Distribution Hauler</option>
+                        </select>
+
+                        <select id="vehiclesStatusFilter" class="toolbar-select">
+                            <option value="">All Statuses</option>
+                            <option value="Available">Available</option>
+                            <option value="In Service">In Service</option>
+                        </select>
+
+                        <button id="clearVehiclesSearch" class="secondary-button toolbar-clear-btn">
+                            Clear
+                        </button>
+                    </div>
+
+                </div>
+
+                <div class="toolbar-meta">
+                    <span id="vehiclesCountDisplay">Loading vehicles...</span>
+                    <span class="toolbar-hint">
+                        <i class="fa-solid fa-circle-info"></i>
+                        Click any vehicle row or action button to inspect specifications and assigned shipments
+                    </span>
+                </div>
+
+            </div>
+
+
+            <!-- VEHICLES TABLE -->
+            <div class="panel">
+
+                <div class="table-wrapper">
+
+                    <table id="vehiclesTable">
+
+                        <thead>
+                            <tr>
+                                <th>Vehicle ID</th>
+                                <th>Registration No.</th>
+                                <th>Vehicle Type</th>
+                                <th>Capacity (kg)</th>
+                                <th>Assigned Branch</th>
+                                <th>City</th>
+                                <th>Status</th>
+                                <th>Active Shipments</th>
+                                <th style="text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="vehiclesTableBody">
+                            <tr>
+                                <td colspan="9" class="empty-state">
+                                    Loading vehicle records...
                                 </td>
                             </tr>
                         </tbody>
@@ -2168,6 +2494,344 @@
             </button>
 
         </div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     SHIPMENT DETAILS MODAL
+========================================================== -->
+
+<div
+    id="shipmentDetailsModal"
+    class="modal-overlay"
+    aria-hidden="true"
+>
+
+    <div class="modal-card shipment-details-card">
+
+        <div class="modal-header">
+
+            <div>
+                <span class="eyebrow">
+                    DISPATCH &amp; ROUTE RECORD
+                </span>
+                <h2 id="detailShipmentTitle">
+                    Shipment Details
+                </h2>
+                <p id="detailShipmentMeta">
+                    Shipment ID: #---
+                </p>
+            </div>
+
+            <button
+                id="closeShipmentDetailsModal"
+                class="modal-close"
+                type="button"
+            >
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </div>
+
+        <div class="shipment-modal-body">
+
+            <div class="shipment-info-grid">
+
+                <div class="shipment-info-card">
+                    <span class="info-card-label">Shipment Status</span>
+                    <div id="detailShipmentStatus" class="info-card-value">...</div>
+                </div>
+
+                <div class="shipment-info-card">
+                    <span class="info-card-label">Current Location</span>
+                    <div id="detailShipmentLocation" class="info-card-value">...</div>
+                </div>
+
+                <div class="shipment-info-card">
+                    <span class="info-card-label">Route</span>
+                    <div id="detailShipmentRoute" class="info-card-value">...</div>
+                </div>
+
+                <div class="shipment-info-card">
+                    <span class="info-card-label">Shipment Date</span>
+                    <div id="detailShipmentDate" class="info-card-value">...</div>
+                </div>
+
+                <div class="shipment-info-card">
+                    <span class="info-card-label">Sender Details</span>
+                    <div id="detailShipmentSender" class="info-card-value">...</div>
+                    <span id="detailShipmentSenderContact" class="cell-subtext">...</span>
+                </div>
+
+                <div class="shipment-info-card">
+                    <span class="info-card-label">Receiver Details</span>
+                    <div id="detailShipmentReceiver" class="info-card-value">...</div>
+                    <span id="detailShipmentReceiverContact" class="cell-subtext">...</span>
+                </div>
+
+                <div class="shipment-info-card">
+                    <span class="info-card-label">Assigned Vehicle</span>
+                    <div id="detailShipmentVehicle" class="info-card-value">...</div>
+                    <span id="detailShipmentVehicleType" class="cell-subtext">...</span>
+                </div>
+
+                <div class="shipment-info-card">
+                    <span class="info-card-label">Assigned Personnel</span>
+                    <div id="detailShipmentEmployee" class="info-card-value">...</div>
+                    <span id="detailShipmentEmployeeRole" class="cell-subtext">...</span>
+                </div>
+
+                <div class="shipment-info-card full-width">
+                    <span class="info-card-label">Package Specifications</span>
+                    <div id="detailShipmentPackage" class="info-card-value">...</div>
+                </div>
+
+            </div>
+
+            <!-- TRACKING TIMELINE -->
+            <div class="shipment-timeline-wrap">
+                <h4>
+                    <i class="fa-solid fa-timeline"></i>
+                    Tracking History &amp; Checkpoints
+                </h4>
+                <div id="detailShipmentTimeline" class="shipment-timeline">
+                    <p class="empty-state">No tracking checkpoint events recorded</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="modal-actions">
+
+            <button
+                type="button"
+                id="closeShipmentDetailsButton"
+                class="secondary-button"
+            >
+                Close
+            </button>
+
+            <button
+                type="button"
+                id="viewTrackingFromShipmentButton"
+                class="primary-button"
+            >
+                <i class="fa-solid fa-location-dot"></i>
+                <span>Open Live Tracking</span>
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     VEHICLE DETAILS MODAL
+========================================================== -->
+
+<div
+    id="vehicleDetailsModal"
+    class="modal-overlay"
+    aria-hidden="true"
+>
+
+    <div class="modal-card vehicle-details-card">
+
+        <div class="modal-header">
+
+            <div>
+                <span class="eyebrow">
+                    FLEET ASSET DETAILS
+                </span>
+                <h2 id="detailVehicleNumber">
+                    Vehicle Number
+                </h2>
+                <p id="detailVehicleMeta">
+                    Vehicle ID: #---
+                </p>
+            </div>
+
+            <button
+                id="closeVehicleDetailsModal"
+                class="modal-close"
+                type="button"
+            >
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </div>
+
+        <div class="vehicle-modal-body">
+
+            <div class="vehicle-info-grid">
+
+                <div class="vehicle-info-card">
+                    <span class="info-card-label">Operational Status</span>
+                    <div id="detailVehicleStatus" class="info-card-value">...</div>
+                </div>
+
+                <div class="vehicle-info-card">
+                    <span class="info-card-label">Vehicle Type</span>
+                    <div id="detailVehicleType" class="info-card-value">...</div>
+                </div>
+
+                <div class="vehicle-info-card">
+                    <span class="info-card-label">Payload Capacity</span>
+                    <div id="detailVehicleCapacity" class="info-card-value">...</div>
+                </div>
+
+                <div class="vehicle-info-card">
+                    <span class="info-card-label">Stationed Branch</span>
+                    <div id="detailVehicleBranch" class="info-card-value">...</div>
+                    <span id="detailVehicleLocation" class="cell-subtext">...</span>
+                </div>
+
+            </div>
+
+            <div class="recent-vehicle-shipments-wrap">
+                <h4>
+                    <i class="fa-solid fa-truck-fast"></i>
+                    Recent Assigned Shipments
+                </h4>
+                <div class="table-wrapper">
+                    <table class="subtable">
+                        <thead>
+                            <tr>
+                                <th>Shipment ID</th>
+                                <th>Tracking Number</th>
+                                <th>Status</th>
+                                <th>Type / Weight</th>
+                                <th>Officer</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailVehicleShipmentsTable">
+                            <tr>
+                                <td colspan="6" class="empty-state">No assigned shipments found</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="modal-actions">
+
+            <button
+                type="button"
+                id="closeVehicleDetailsButton"
+                class="secondary-button"
+            >
+                Close
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     ASSIGN SHIPMENT MODAL
+========================================================== -->
+
+<div
+    id="assignShipmentModal"
+    class="modal-overlay"
+    aria-hidden="true"
+>
+
+    <div class="modal-card assign-shipment-card">
+
+        <div class="modal-header">
+
+            <div>
+                <span class="eyebrow">
+                    DISPATCH ASSIGNMENT
+                </span>
+                <h2>Assign Shipment</h2>
+                <p>Link an existing booked parcel to a delivery vehicle and operations officer.</p>
+            </div>
+
+            <button
+                id="closeAssignShipmentModal"
+                class="modal-close"
+                type="button"
+            >
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </div>
+
+        <form id="assignShipmentForm" class="modal-form">
+
+            <div class="form-section">
+
+                <div class="form-group full-width">
+                    <label for="assignParcelSelect">
+                        Select Unassigned Parcel <span style="color: #f87171;">*</span>
+                    </label>
+                    <select id="assignParcelSelect" required>
+                        <option value="">Loading unassigned parcels...</option>
+                    </select>
+                    <span id="unassignedParcelHint" class="form-hint" style="font-size: 12px; color: #94a3b8; margin-top: 4px; display: block;"></span>
+                </div>
+
+                <div class="form-grid">
+
+                    <div class="form-group">
+                        <label for="assignVehicleSelect">
+                            Select Vehicle <span style="color: #f87171;">*</span>
+                        </label>
+                        <select id="assignVehicleSelect" required>
+                            <option value="">Loading vehicles...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="assignEmployeeSelect">
+                            Select Operations Officer <span style="color: #f87171;">*</span>
+                        </label>
+                        <select id="assignEmployeeSelect" required>
+                            <option value="">Loading employees...</option>
+                        </select>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div id="assignShipmentMessage" class="form-message"></div>
+
+            <div class="modal-actions">
+
+                <button
+                    type="button"
+                    id="cancelAssignShipmentModal"
+                    class="secondary-button"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="submit"
+                    id="submitAssignShipmentButton"
+                    class="primary-button"
+                >
+                    <i class="fa-solid fa-truck-fast"></i>
+                    <span>Assign &amp; Dispatch</span>
+                </button>
+
+            </div>
+
+        </form>
 
     </div>
 

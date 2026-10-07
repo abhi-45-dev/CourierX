@@ -1534,6 +1534,573 @@ def track_parcel(
         db.close()
 
 
+
+# =========================================================
+# SHIPMENTS MANAGEMENT API
+# =========================================================
+
+@app.route("/api/shipments", methods=["GET"])
+def get_shipments():
+
+    search_query = request.args.get("search", "").strip()
+    status_filter = request.args.get("status", "").strip()
+
+    db = get_db_connection()
+
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        conditions = []
+        params = []
+
+        if search_query:
+            conditions.append("""(
+                CAST(s.shipment_id AS CHAR) = %s
+                OR p.tracking_number LIKE %s
+                OR sender.name LIKE %s
+                OR receiver.name LIKE %s
+                OR origin.branch_name LIKE %s
+                OR origin.city LIKE %s
+                OR destination.branch_name LIKE %s
+                OR destination.city LIKE %s
+            )""")
+            search_param = f"%{search_query}%"
+            params.extend([
+                search_query,
+                search_param,
+                search_param,
+                search_param,
+                search_param,
+                search_param,
+                search_param,
+                search_param
+            ])
+
+        if status_filter in ["Pending", "In Transit", "Out for Delivery", "Delivered"]:
+            conditions.append("p.status = %s")
+            params.append(status_filter)
+
+        where_clause = ""
+        if conditions:
+            where_clause = f"WHERE {' AND '.join(conditions)}"
+
+        query = f"""
+            SELECT
+                s.shipment_id,
+                s.parcel_id,
+                s.vehicle_id,
+                s.employee_id,
+                DATE_FORMAT(s.shipment_date, '%Y-%m-%d %H:%i') AS shipment_date,
+                p.tracking_number,
+                p.weight,
+                p.parcel_type,
+                p.shipping_cost,
+                p.status,
+                DATE_FORMAT(p.booking_date, '%Y-%m-%d %H:%i') AS booking_date,
+                sender.name AS sender_name,
+                sender.phone AS sender_phone,
+                sender.email AS sender_email,
+                receiver.name AS receiver_name,
+                receiver.phone AS receiver_phone,
+                receiver.email AS receiver_email,
+                origin.branch_id AS origin_branch_id,
+                origin.branch_name AS origin_branch,
+                origin.city AS origin_city,
+                origin.state AS origin_state,
+                destination.branch_id AS destination_branch_id,
+                destination.branch_name AS destination_branch,
+                destination.city AS destination_city,
+                destination.state AS destination_state,
+                e.name AS employee_name,
+                e.role AS employee_role,
+                v.vehicle_number,
+                v.vehicle_type,
+                COALESCE(
+                    (
+                        SELECT tu.location
+                        FROM Tracking_Update tu
+                        WHERE tu.parcel_id = p.parcel_id
+                        ORDER BY tu.update_time DESC, tu.update_id DESC
+                        LIMIT 1
+                    ),
+                    origin.city,
+                    'In Transit'
+                ) AS current_location
+            FROM Shipment s
+            JOIN Parcel p ON s.parcel_id = p.parcel_id
+            JOIN Customer sender ON p.sender_id = sender.customer_id
+            JOIN Customer receiver ON p.receiver_id = receiver.customer_id
+            LEFT JOIN Branch origin ON p.origin_branch_id = origin.branch_id
+            LEFT JOIN Branch destination ON p.destination_branch_id = destination.branch_id
+            LEFT JOIN Employee e ON s.employee_id = e.employee_id
+            LEFT JOIN Vehicle v ON s.vehicle_id = v.vehicle_id
+            {where_clause}
+            ORDER BY s.shipment_date DESC, s.shipment_id DESC
+        """
+
+        cursor.execute(query, tuple(params))
+        shipments = cursor.fetchall()
+
+        return jsonify(shipments)
+
+    except Exception as error:
+        return jsonify({"error": str(error)}), 500
+
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/shipments/stats", methods=["GET"])
+def get_shipment_stats():
+
+    db = get_db_connection()
+
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT
+                COUNT(s.shipment_id) AS total_shipments,
+                COALESCE(SUM(CASE WHEN p.status = 'Pending' THEN 1 ELSE 0 END), 0) AS pending,
+                COALESCE(SUM(CASE WHEN p.status = 'In Transit' THEN 1 ELSE 0 END), 0) AS in_transit,
+                COALESCE(SUM(CASE WHEN p.status = 'Out for Delivery' THEN 1 ELSE 0 END), 0) AS out_for_delivery,
+                COALESCE(SUM(CASE WHEN p.status = 'Delivered' THEN 1 ELSE 0 END), 0) AS delivered
+            FROM Shipment s
+            JOIN Parcel p ON s.parcel_id = p.parcel_id
+        """)
+
+        stats = cursor.fetchone() or {}
+
+        return jsonify({
+            "total_shipments": int(stats.get("total_shipments") or 0),
+            "pending": int(stats.get("pending") or 0),
+            "in_transit": int(stats.get("in_transit") or 0),
+            "out_for_delivery": int(stats.get("out_for_delivery") or 0),
+            "delivered": int(stats.get("delivered") or 0)
+        })
+
+    except Exception as error:
+        return jsonify({"error": str(error)}), 500
+
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/shipments/<int:shipment_id>", methods=["GET"])
+def get_shipment(shipment_id):
+
+    db = get_db_connection()
+
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute("""
+            SELECT
+                s.shipment_id,
+                s.parcel_id,
+                s.vehicle_id,
+                s.employee_id,
+                DATE_FORMAT(s.shipment_date, '%Y-%m-%d %H:%i') AS shipment_date,
+                p.tracking_number,
+                p.weight,
+                p.parcel_type,
+                p.shipping_cost,
+                p.status,
+                DATE_FORMAT(p.booking_date, '%Y-%m-%d %H:%i') AS booking_date,
+                sender.name AS sender_name,
+                sender.email AS sender_email,
+                sender.phone AS sender_phone,
+                sender.address AS sender_address,
+                receiver.name AS receiver_name,
+                receiver.email AS receiver_email,
+                receiver.phone AS receiver_phone,
+                receiver.address AS receiver_address,
+                origin.branch_id AS origin_branch_id,
+                origin.branch_name AS origin_branch,
+                origin.city AS origin_city,
+                origin.state AS origin_state,
+                origin.phone AS origin_phone,
+                origin.address AS origin_address,
+                destination.branch_id AS destination_branch_id,
+                destination.branch_name AS destination_branch,
+                destination.city AS destination_city,
+                destination.state AS destination_state,
+                destination.phone AS destination_phone,
+                destination.address AS destination_address,
+                e.name AS employee_name,
+                e.role AS employee_role,
+                e.phone AS employee_phone,
+                e.email AS employee_email,
+                v.vehicle_number,
+                v.vehicle_type,
+                v.capacity AS vehicle_capacity,
+                COALESCE(
+                    (
+                        SELECT tu.location
+                        FROM Tracking_Update tu
+                        WHERE tu.parcel_id = p.parcel_id
+                        ORDER BY tu.update_time DESC, tu.update_id DESC
+                        LIMIT 1
+                    ),
+                    origin.city,
+                    'In Transit'
+                ) AS current_location
+            FROM Shipment s
+            JOIN Parcel p ON s.parcel_id = p.parcel_id
+            JOIN Customer sender ON p.sender_id = sender.customer_id
+            JOIN Customer receiver ON p.receiver_id = receiver.customer_id
+            LEFT JOIN Branch origin ON p.origin_branch_id = origin.branch_id
+            LEFT JOIN Branch destination ON p.destination_branch_id = destination.branch_id
+            LEFT JOIN Employee e ON s.employee_id = e.employee_id
+            LEFT JOIN Vehicle v ON s.vehicle_id = v.vehicle_id
+            WHERE s.shipment_id = %s
+        """, (shipment_id,))
+
+        shipment = cursor.fetchone()
+
+        if shipment is None:
+            return jsonify({"error": "Shipment not found"}), 404
+
+        # Related tracking history for the shipment's parcel
+        cursor.execute("""
+            SELECT
+                tu.update_id,
+                tu.status,
+                tu.location,
+                DATE_FORMAT(tu.update_time, '%Y-%m-%d %H:%i') AS update_time,
+                b.branch_name,
+                b.city,
+                b.state,
+                e.name AS employee_name
+            FROM Tracking_Update tu
+            LEFT JOIN Branch b ON tu.branch_id = b.branch_id
+            LEFT JOIN Employee e ON tu.employee_id = e.employee_id
+            WHERE tu.parcel_id = %s
+            ORDER BY tu.update_time ASC, tu.update_id ASC
+        """, (shipment["parcel_id"],))
+
+        shipment["tracking_history"] = cursor.fetchall()
+
+        return jsonify(shipment)
+
+    except Exception as error:
+        return jsonify({"error": str(error)}), 500
+
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/shipments", methods=["POST"])
+def create_shipment():
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    try:
+        parcel_id = int(data.get("parcel_id"))
+        vehicle_id = int(data.get("vehicle_id"))
+        employee_id = int(data.get("employee_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "parcel_id, vehicle_id, and employee_id must be valid integers"}), 400
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        # 1. Validate parcel
+        cursor.execute("SELECT parcel_id, tracking_number, origin_branch_id, status FROM Parcel WHERE parcel_id = %s", (parcel_id,))
+        parcel = cursor.fetchone()
+        if not parcel:
+            return jsonify({"error": "Parcel not found"}), 404
+
+        # 2. Check if parcel already has a shipment
+        cursor.execute("SELECT shipment_id FROM Shipment WHERE parcel_id = %s", (parcel_id,))
+        existing_shipment = cursor.fetchone()
+        if existing_shipment:
+            return jsonify({"error": f"Parcel #{parcel['tracking_number']} already has an assigned shipment (#SHP-{existing_shipment['shipment_id']})"}), 409
+
+        # 3. Validate vehicle
+        cursor.execute("SELECT vehicle_id, vehicle_number, branch_id FROM Vehicle WHERE vehicle_id = %s", (vehicle_id,))
+        vehicle = cursor.fetchone()
+        if not vehicle:
+            return jsonify({"error": "Vehicle not found"}), 404
+
+        # 4. Validate employee
+        cursor.execute("SELECT employee_id, name, branch_id FROM Employee WHERE employee_id = %s", (employee_id,))
+        employee = cursor.fetchone()
+        if not employee:
+            return jsonify({"error": "Employee not found"}), 404
+
+        # 5. Insert Shipment
+        cursor.execute("""
+            INSERT INTO Shipment (parcel_id, vehicle_id, employee_id, shipment_date)
+            VALUES (%s, %s, %s, NOW())
+        """, (parcel_id, vehicle_id, employee_id))
+        shipment_id = cursor.lastrowid
+
+        # 6. If no tracking update exists yet for this parcel, insert an initial dispatch scan
+        cursor.execute("SELECT COUNT(*) as count FROM Tracking_Update WHERE parcel_id = %s", (parcel_id,))
+        if cursor.fetchone()["count"] == 0:
+            cursor.execute("SELECT city, branch_name FROM Branch WHERE branch_id = %s", (parcel["origin_branch_id"],))
+            origin_b = cursor.fetchone()
+            location = f"{origin_b['branch_name']}, {origin_b['city']}" if origin_b else "Origin Hub"
+            cursor.execute("""
+                INSERT INTO Tracking_Update (parcel_id, branch_id, employee_id, status, location, update_time)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+            """, (parcel_id, parcel["origin_branch_id"], employee_id, parcel["status"] or "Pending", location))
+
+        db.commit()
+
+        return jsonify({
+            "message": "Shipment assigned successfully",
+            "shipment_id": shipment_id,
+            "parcel_id": parcel_id,
+            "tracking_number": parcel["tracking_number"],
+            "vehicle_number": vehicle["vehicle_number"],
+            "employee_name": employee["name"]
+        }), 201
+
+    except Exception as error:
+        db.rollback()
+        return jsonify({"error": str(error)}), 500
+
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/shipments/unassigned-parcels", methods=["GET"])
+def get_unassigned_parcels():
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT 
+                p.parcel_id,
+                p.tracking_number,
+                p.parcel_type,
+                p.weight,
+                p.status,
+                p.origin_branch_id,
+                ob.branch_name AS origin_branch,
+                ob.city AS origin_city,
+                p.destination_branch_id,
+                db.branch_name AS destination_branch,
+                db.city AS destination_city
+            FROM Parcel p
+            LEFT JOIN Shipment s ON p.parcel_id = s.parcel_id
+            JOIN Branch ob ON p.origin_branch_id = ob.branch_id
+            JOIN Branch db ON p.destination_branch_id = db.branch_id
+            WHERE s.shipment_id IS NULL
+            ORDER BY p.booking_date DESC
+        """)
+        return jsonify(cursor.fetchall())
+    finally:
+        cursor.close()
+        db.close()
+
+
+# =========================================================
+# VEHICLES MANAGEMENT API
+# =========================================================
+
+@app.route("/api/vehicles", methods=["GET"])
+def get_vehicles():
+
+    search_query = request.args.get("search", "").strip()
+    type_filter = request.args.get("type", "").strip()
+    status_filter = request.args.get("status", "").strip()
+    branch_id = request.args.get("branch_id")
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        conditions = []
+        params = []
+
+        if search_query:
+            conditions.append("""(
+                v.vehicle_number LIKE %s
+                OR v.vehicle_type LIKE %s
+                OR b.branch_name LIKE %s
+                OR b.city LIKE %s
+                OR CAST(v.vehicle_id AS CHAR) = %s
+            )""")
+            search_param = f"%{search_query}%"
+            params.extend([search_param, search_param, search_param, search_param, search_query])
+
+        if type_filter:
+            conditions.append("v.vehicle_type = %s")
+            params.append(type_filter)
+
+        if branch_id:
+            conditions.append("v.branch_id = %s")
+            params.append(branch_id)
+
+        where_clause = ""
+        if conditions:
+            where_clause = f"WHERE {' AND '.join(conditions)}"
+
+        query = f"""
+            SELECT
+                v.vehicle_id,
+                v.vehicle_number,
+                v.vehicle_type,
+                v.capacity,
+                v.branch_id,
+                b.branch_name,
+                b.city,
+                b.state,
+                (
+                    SELECT COUNT(*)
+                    FROM Shipment s
+                    JOIN Parcel p ON s.parcel_id = p.parcel_id
+                    WHERE s.vehicle_id = v.vehicle_id
+                      AND p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+                ) AS active_shipments
+            FROM Vehicle v
+            JOIN Branch b ON v.branch_id = b.branch_id
+            {where_clause}
+            ORDER BY v.vehicle_id ASC
+        """
+        cursor.execute(query, tuple(params))
+        vehicles = cursor.fetchall()
+
+        for veh in vehicles:
+            veh["status"] = "In Service" if veh["active_shipments"] > 0 else "Available"
+
+        if status_filter in ["Available", "In Service"]:
+            vehicles = [v for v in vehicles if v["status"] == status_filter]
+
+        return jsonify(vehicles)
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/vehicles/stats", methods=["GET"])
+def get_vehicle_stats():
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                COUNT(v.vehicle_id) AS total_vehicles,
+                COALESCE(SUM(v.capacity), 0) AS total_capacity
+            FROM Vehicle v
+        """)
+        base = cursor.fetchone() or {}
+
+        cursor.execute("""
+            SELECT COUNT(DISTINCT s.vehicle_id) AS in_service
+            FROM Shipment s
+            JOIN Parcel p ON s.parcel_id = p.parcel_id
+            WHERE p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+        """)
+        in_serv = cursor.fetchone()["in_service"] or 0
+
+        total_v = int(base.get("total_vehicles") or 0)
+        avail = max(0, total_v - int(in_serv))
+
+        return jsonify({
+            "total_vehicles": total_v,
+            "in_service": int(in_serv),
+            "available": avail,
+            "total_capacity": float(base.get("total_capacity") or 0.0)
+        })
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/vehicles/<int:vehicle_id>", methods=["GET"])
+def get_vehicle(vehicle_id):
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                v.vehicle_id,
+                v.vehicle_number,
+                v.vehicle_type,
+                v.capacity,
+                v.branch_id,
+                b.branch_name,
+                b.city,
+                b.state,
+                b.phone as branch_phone
+            FROM Vehicle v
+            JOIN Branch b ON v.branch_id = b.branch_id
+            WHERE v.vehicle_id = %s
+        """, (vehicle_id,))
+        vehicle = cursor.fetchone()
+        if not vehicle:
+            return jsonify({"error": "Vehicle not found"}), 404
+
+        cursor.execute("""
+            SELECT
+                s.shipment_id,
+                p.tracking_number,
+                p.status,
+                p.parcel_type,
+                p.weight,
+                e.name AS employee_name,
+                DATE_FORMAT(s.shipment_date, '%Y-%m-%d %H:%i') AS shipment_date
+            FROM Shipment s
+            JOIN Parcel p ON s.parcel_id = p.parcel_id
+            LEFT JOIN Employee e ON s.employee_id = e.employee_id
+            WHERE s.vehicle_id = %s
+            ORDER BY s.shipment_date DESC
+            LIMIT 10
+        """, (vehicle_id,))
+        vehicle["recent_shipments"] = cursor.fetchall()
+        vehicle["status"] = "In Service" if any(s["status"] in ['Pending', 'In Transit', 'Out for Delivery'] for s in vehicle["recent_shipments"]) else "Available"
+
+        return jsonify(vehicle)
+    finally:
+        cursor.close()
+        db.close()
+
+
+# =========================================================
+# EMPLOYEES API
+# =========================================================
+
+@app.route("/api/employees", methods=["GET"])
+def get_employees():
+
+    branch_id = request.args.get("branch_id")
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        if branch_id:
+            cursor.execute("""
+                SELECT e.employee_id, e.name, e.phone, e.email, e.role, e.branch_id, b.branch_name, b.city
+                FROM Employee e
+                JOIN Branch b ON e.branch_id = b.branch_id
+                WHERE e.branch_id = %s
+                ORDER BY e.name ASC
+            """, (branch_id,))
+        else:
+            cursor.execute("""
+                SELECT e.employee_id, e.name, e.phone, e.email, e.role, e.branch_id, b.branch_name, b.city
+                FROM Employee e
+                JOIN Branch b ON e.branch_id = b.branch_id
+                ORDER BY e.employee_id ASC
+            """)
+        return jsonify(cursor.fetchall())
+    finally:
+        cursor.close()
+        db.close()
+
+
 # =========================================================
 # RUN APPLICATION
 # =========================================================

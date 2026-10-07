@@ -2,6 +2,9 @@ document.addEventListener("DOMContentLoaded", () => {
     setupNavigation();
     setupParcelsView();
     setupBranchesView();
+    setupShipmentsView();
+    setupVehiclesView();
+    setupAssignShipmentModal();
     loadDashboard();
     loadCustomers();
     loadBranches();
@@ -1631,8 +1634,12 @@ function escapeHtml(value) {
 function setupNavigation() {
     const navDashboard = document.getElementById("navDashboard");
     const navParcels = document.getElementById("navParcels");
+    const navShipments = document.getElementById("navShipments");
+    const navVehicles = document.getElementById("navVehicles");
     const navBranches = document.getElementById("navBranches");
     const viewAllButton = document.getElementById("viewAllParcelsButton");
+    const assignShipmentButton = document.getElementById("assignShipmentButton");
+    const shipmentsAssignButton = document.getElementById("shipmentsAssignButton");
 
     if (navDashboard) {
         navDashboard.addEventListener("click", event => {
@@ -1645,6 +1652,20 @@ function setupNavigation() {
         navParcels.addEventListener("click", event => {
             event.preventDefault();
             switchToView("parcels");
+        });
+    }
+
+    if (navShipments) {
+        navShipments.addEventListener("click", event => {
+            event.preventDefault();
+            switchToView("shipments");
+        });
+    }
+
+    if (navVehicles) {
+        navVehicles.addEventListener("click", event => {
+            event.preventDefault();
+            switchToView("vehicles");
         });
     }
 
@@ -1661,26 +1682,84 @@ function setupNavigation() {
             switchToView("parcels");
         });
     }
+
+    if (assignShipmentButton) {
+        assignShipmentButton.addEventListener("click", event => {
+            event.preventDefault();
+            openAssignShipmentModal();
+        });
+    }
+
+    if (shipmentsAssignButton) {
+        shipmentsAssignButton.addEventListener("click", event => {
+            event.preventDefault();
+            openAssignShipmentModal();
+        });
+    }
 }
 
 
 function switchToView(viewName) {
     const dashboardView = document.getElementById("dashboardView");
     const parcelsView = document.getElementById("parcelsView");
+    const shipmentsView = document.getElementById("shipmentsView");
+    const vehiclesView = document.getElementById("vehiclesView");
     const branchesView = document.getElementById("branchesView");
     const navDashboard = document.getElementById("navDashboard");
     const navParcels = document.getElementById("navParcels");
+    const navShipments = document.getElementById("navShipments");
+    const navVehicles = document.getElementById("navVehicles");
     const navBranches = document.getElementById("navBranches");
     const topbarTitle = document.getElementById("topbarTitle");
     const topbarSubtitle = document.getElementById("topbarSubtitle");
 
-    if (viewName === "branches") {
+    if (viewName === "shipments") {
         if (dashboardView) dashboardView.style.display = "none";
         if (parcelsView) parcelsView.style.display = "none";
+        if (vehiclesView) vehiclesView.style.display = "none";
+        if (branchesView) branchesView.style.display = "none";
+        if (shipmentsView) shipmentsView.style.display = "block";
+
+        if (navDashboard) navDashboard.classList.remove("active");
+        if (navParcels) navParcels.classList.remove("active");
+        if (navVehicles) navVehicles.classList.remove("active");
+        if (navBranches) navBranches.classList.remove("active");
+        if (navShipments) navShipments.classList.add("active");
+
+        if (topbarTitle) topbarTitle.textContent = "Shipments";
+        if (topbarSubtitle) topbarSubtitle.textContent = "Manage shipments, routes, delivery progress, and operational status.";
+
+        loadShipmentStats();
+        loadShipmentsTable();
+    } else if (viewName === "vehicles") {
+        if (dashboardView) dashboardView.style.display = "none";
+        if (parcelsView) parcelsView.style.display = "none";
+        if (shipmentsView) shipmentsView.style.display = "none";
+        if (branchesView) branchesView.style.display = "none";
+        if (vehiclesView) vehiclesView.style.display = "block";
+
+        if (navDashboard) navDashboard.classList.remove("active");
+        if (navParcels) navParcels.classList.remove("active");
+        if (navShipments) navShipments.classList.remove("active");
+        if (navBranches) navBranches.classList.remove("active");
+        if (navVehicles) navVehicles.classList.add("active");
+
+        if (topbarTitle) topbarTitle.textContent = "Fleet Vehicles";
+        if (topbarSubtitle) topbarSubtitle.textContent = "Monitor delivery vehicles, fleet capacity, and branch assignments.";
+
+        loadVehicleStats();
+        loadVehiclesTable();
+    } else if (viewName === "branches") {
+        if (dashboardView) dashboardView.style.display = "none";
+        if (parcelsView) parcelsView.style.display = "none";
+        if (shipmentsView) shipmentsView.style.display = "none";
+        if (vehiclesView) vehiclesView.style.display = "none";
         if (branchesView) branchesView.style.display = "block";
 
         if (navDashboard) navDashboard.classList.remove("active");
         if (navParcels) navParcels.classList.remove("active");
+        if (navShipments) navShipments.classList.remove("active");
+        if (navVehicles) navVehicles.classList.remove("active");
         if (navBranches) navBranches.classList.add("active");
 
         if (topbarTitle) topbarTitle.textContent = "Branch Management";
@@ -1691,10 +1770,14 @@ function switchToView(viewName) {
     } else if (viewName === "parcels") {
         if (dashboardView) dashboardView.style.display = "none";
         if (branchesView) branchesView.style.display = "none";
+        if (shipmentsView) shipmentsView.style.display = "none";
+        if (vehiclesView) vehiclesView.style.display = "none";
         if (parcelsView) parcelsView.style.display = "block";
 
         if (navDashboard) navDashboard.classList.remove("active");
         if (navBranches) navBranches.classList.remove("active");
+        if (navShipments) navShipments.classList.remove("active");
+        if (navVehicles) navVehicles.classList.remove("active");
         if (navParcels) navParcels.classList.add("active");
 
         if (topbarTitle) topbarTitle.textContent = "Parcels";
@@ -1704,10 +1787,14 @@ function switchToView(viewName) {
     } else {
         if (parcelsView) parcelsView.style.display = "none";
         if (branchesView) branchesView.style.display = "none";
+        if (shipmentsView) shipmentsView.style.display = "none";
+        if (vehiclesView) vehiclesView.style.display = "none";
         if (dashboardView) dashboardView.style.display = "block";
 
         if (navParcels) navParcels.classList.remove("active");
         if (navBranches) navBranches.classList.remove("active");
+        if (navShipments) navShipments.classList.remove("active");
+        if (navVehicles) navVehicles.classList.remove("active");
         if (navDashboard) navDashboard.classList.add("active");
 
         if (topbarTitle) topbarTitle.textContent = "Dashboard";
@@ -2648,5 +2735,1003 @@ function closeBranchConfirmModal() {
     if (modal) {
         modal.classList.remove("show");
         modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+
+// =========================================================
+// SHIPMENTS MANAGEMENT
+// =========================================================
+
+let shipmentSearchDebounceTimer = null;
+let currentShipmentActiveTrackingNumber = null;
+
+function setupShipmentsView() {
+    const searchInput = document.getElementById("shipmentsSearchInput");
+    const statusFilter = document.getElementById("shipmentsStatusFilter");
+    const clearButton = document.getElementById("clearShipmentsSearch");
+    const refreshButton = document.getElementById("refreshShipmentsButton");
+
+    if (searchInput) {
+        searchInput.addEventListener("input", () => {
+            clearTimeout(shipmentSearchDebounceTimer);
+            shipmentSearchDebounceTimer = setTimeout(() => {
+                loadShipmentsTable();
+            }, 300);
+        });
+    }
+
+    if (statusFilter) {
+        statusFilter.addEventListener("change", () => {
+            loadShipmentsTable();
+        });
+    }
+
+    if (clearButton) {
+        clearButton.addEventListener("click", () => {
+            if (searchInput) searchInput.value = "";
+            if (statusFilter) statusFilter.value = "";
+            loadShipmentsTable();
+        });
+    }
+
+    if (refreshButton) {
+        refreshButton.addEventListener("click", () => {
+            loadShipmentStats();
+            loadShipmentsTable();
+            showToast("Shipments Refreshed", "Live shipment data and KPIs updated from database.");
+        });
+    }
+
+    // Modal listeners
+    const modal = document.getElementById("shipmentDetailsModal");
+    const closeBtn = document.getElementById("closeShipmentDetailsModal");
+    const closeActionBtn = document.getElementById("closeShipmentDetailsButton");
+    const liveTrackingBtn = document.getElementById("viewTrackingFromShipmentButton");
+
+    if (closeBtn) closeBtn.addEventListener("click", closeShipmentDetailsModal);
+    if (closeActionBtn) closeActionBtn.addEventListener("click", closeShipmentDetailsModal);
+
+    if (modal) {
+        modal.addEventListener("click", event => {
+            if (event.target === modal) {
+                closeShipmentDetailsModal();
+            }
+        });
+    }
+
+    if (liveTrackingBtn) {
+        liveTrackingBtn.addEventListener("click", () => {
+            if (currentShipmentActiveTrackingNumber) {
+                closeShipmentDetailsModal();
+                fetchAndShowParcelDetails(currentShipmentActiveTrackingNumber);
+            }
+        });
+    }
+
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && modal && modal.classList.contains("show")) {
+            closeShipmentDetailsModal();
+        }
+    });
+}
+
+
+async function loadShipmentStats() {
+    try {
+        const response = await fetch("/api/shipments/stats");
+        if (!response.ok) throw new Error("Failed to load shipment statistics");
+
+        const stats = await response.json();
+
+        const totalEl = document.getElementById("totalShipmentsCount");
+        const pendingEl = document.getElementById("pendingShipmentsCount");
+        const transitEl = document.getElementById("inTransitShipmentsCount");
+        const outEl = document.getElementById("outForDeliveryShipmentsCount");
+        const deliveredEl = document.getElementById("deliveredShipmentsCount");
+
+        if (totalEl) totalEl.textContent = stats.total_shipments ?? 0;
+        if (pendingEl) pendingEl.textContent = stats.pending ?? 0;
+        if (transitEl) transitEl.textContent = stats.in_transit ?? 0;
+        if (outEl) outEl.textContent = stats.out_for_delivery ?? 0;
+        if (deliveredEl) deliveredEl.textContent = stats.delivered ?? 0;
+    } catch (error) {
+        console.error("Error loading shipment stats:", error);
+    }
+}
+
+
+async function loadShipmentsTable() {
+    const tableBody = document.getElementById("shipmentsTableBody");
+    const countDisplay = document.getElementById("shipmentsCountDisplay");
+    const searchInput = document.getElementById("shipmentsSearchInput");
+    const statusFilter = document.getElementById("shipmentsStatusFilter");
+
+    if (!tableBody) return;
+
+    const searchQuery = searchInput ? searchInput.value.trim() : "";
+    const selectedStatus = statusFilter ? statusFilter.value.trim() : "";
+
+    const params = new URLSearchParams();
+    if (searchQuery) params.append("search", searchQuery);
+    if (selectedStatus) params.append("status", selectedStatus);
+
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="9" class="empty-state">
+                <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px;"></i>
+                Loading shipment records from database...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const url = `/api/shipments${params.toString() ? `?${params.toString()}` : ""}`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error("Failed to load shipments");
+        }
+
+        const shipments = await response.json();
+
+        if (countDisplay) {
+            if (shipments.length === 0) {
+                countDisplay.textContent = "0 shipments found";
+            } else if (shipments.length === 1) {
+                countDisplay.textContent = "1 shipment found";
+            } else {
+                countDisplay.textContent = `${shipments.length} shipments found`;
+            }
+        }
+
+        renderShipmentsTable(shipments);
+    } catch (error) {
+        console.error("Error loading shipments:", error);
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="9" class="empty-state error-message">
+                    <i class="fa-solid fa-triangle-exclamation" style="margin-right: 8px;"></i>
+                    Failed to load shipment records. Please try refreshing.
+                </td>
+            </tr>
+        `;
+        if (countDisplay) countDisplay.textContent = "Error loading shipments";
+    }
+}
+
+
+function renderShipmentsTable(shipments) {
+    const tableBody = document.getElementById("shipmentsTableBody");
+    if (!tableBody) return;
+
+    if (!shipments || shipments.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="9" class="empty-state">
+                    <div style="padding: 24px 0; text-align: center;">
+                        <i class="fa-solid fa-truck-ramp-box" style="font-size: 32px; color: #475569; margin-bottom: 12px; display: block;"></i>
+                        <strong style="color: #cbd5e1; font-size: 15px; display: block; margin-bottom: 4px;">No shipments found</strong>
+                        <span style="color: #64748b; font-size: 13px;">No shipment records match your current filters or have been booked yet.</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tableBody.innerHTML = shipments.map(shipment => {
+        const statusBadge = createStatusBadge(shipment.status || "Pending");
+        const originText = shipment.origin_city ? `${escapeHtml(shipment.origin_branch || "")} (${escapeHtml(shipment.origin_city)})` : escapeHtml(shipment.origin_branch || "N/A");
+        const destText = shipment.destination_city ? `${escapeHtml(shipment.destination_branch || "")} (${escapeHtml(shipment.destination_city)})` : escapeHtml(shipment.destination_branch || "N/A");
+        const currentLocation = shipment.current_location ? escapeHtml(shipment.current_location) : "In Transit";
+
+        return `
+            <tr class="clickable-row" data-shipment-id="${shipment.shipment_id}">
+                <td>
+                    <span class="tracking-pill">
+                        #SHP-${shipment.shipment_id}
+                    </span>
+                </td>
+                <td>
+                    <strong style="color: #f1f5f9; font-family: monospace; font-size: 13px;">
+                        ${escapeHtml(shipment.tracking_number || "N/A")}
+                    </strong>
+                </td>
+                <td>
+                    <div class="customer-cell">
+                        <strong>${escapeHtml(shipment.sender_name || "Unknown")}</strong>
+                        <span class="cell-subtext">${escapeHtml(shipment.sender_phone || "")}</span>
+                    </div>
+                </td>
+                <td>
+                    <div class="customer-cell">
+                        <strong>${escapeHtml(shipment.receiver_name || "Unknown")}</strong>
+                        <span class="cell-subtext">${escapeHtml(shipment.receiver_phone || "")}</span>
+                    </div>
+                </td>
+                <td>
+                    <div class="route-cell">
+                        <span class="route-point">${originText}</span>
+                        <i class="fa-solid fa-arrow-right route-arrow"></i>
+                        <span class="route-point">${destText}</span>
+                    </div>
+                </td>
+                <td>
+                    <span style="display: flex; align-items: center; gap: 6px; color: #cbd5e1; font-size: 13px;">
+                        <i class="fa-solid fa-location-dot" style="color: #38bdf8; font-size: 11px;"></i>
+                        ${currentLocation}
+                    </span>
+                </td>
+                <td>
+                    <span class="date-cell">
+                        ${escapeHtml(shipment.shipment_date || "N/A")}
+                    </span>
+                </td>
+                <td>
+                    ${statusBadge}
+                </td>
+                <td style="text-align: right;">
+                    <button
+                        class="secondary-button action-btn-view view-shipment-btn"
+                        data-shipment-id="${shipment.shipment_id}"
+                        title="View Complete Shipment & Route Details"
+                    >
+                        <i class="fa-solid fa-eye"></i>
+                        <span>View</span>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join("");
+
+    // Bind click events on rows and view buttons
+    tableBody.querySelectorAll(".clickable-row").forEach(row => {
+        row.addEventListener("click", event => {
+            if (event.target.closest("button")) return;
+            const shipmentId = row.getAttribute("data-shipment-id");
+            if (shipmentId) viewShipmentDetails(shipmentId);
+        });
+    });
+
+    tableBody.querySelectorAll(".view-shipment-btn").forEach(btn => {
+        btn.addEventListener("click", event => {
+            event.stopPropagation();
+            const shipmentId = btn.getAttribute("data-shipment-id");
+            if (shipmentId) viewShipmentDetails(shipmentId);
+        });
+    });
+}
+
+
+async function viewShipmentDetails(shipmentId) {
+    const modal = document.getElementById("shipmentDetailsModal");
+    if (!modal) return;
+
+    try {
+        const response = await fetch(`/api/shipments/${shipmentId}`);
+        if (!response.ok) throw new Error("Could not fetch shipment details");
+
+        const s = await response.json();
+        currentShipmentActiveTrackingNumber = s.tracking_number;
+
+        // Populate Header
+        const titleEl = document.getElementById("detailShipmentTitle");
+        const metaEl = document.getElementById("detailShipmentMeta");
+        if (titleEl) titleEl.textContent = `Shipment #SHP-${s.shipment_id}`;
+        if (metaEl) metaEl.textContent = `Tracking Number: ${s.tracking_number} • Booked: ${s.booking_date || s.shipment_date || "N/A"}`;
+
+        // Populate Status & Location
+        const statusEl = document.getElementById("detailShipmentStatus");
+        if (statusEl) {
+            statusEl.innerHTML = createStatusBadge(s.status || "Pending");
+        }
+
+        const locEl = document.getElementById("detailShipmentLocation");
+        if (locEl) {
+            locEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-location-dot" style="color: #38bdf8;"></i>
+                    <strong>${escapeHtml(s.current_location || s.origin_city || "In Transit")}</strong>
+                </div>
+            `;
+        }
+
+        // Route
+        const routeEl = document.getElementById("detailShipmentRoute");
+        if (routeEl) {
+            routeEl.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span><strong>${escapeHtml(s.origin_branch || "Origin")}</strong> (${escapeHtml(s.origin_city || "")}, ${escapeHtml(s.origin_state || "")})</span>
+                    <i class="fa-solid fa-arrow-right" style="color: #64748b;"></i>
+                    <span><strong>${escapeHtml(s.destination_branch || "Destination")}</strong> (${escapeHtml(s.destination_city || "")}, ${escapeHtml(s.destination_state || "")})</span>
+                </div>
+            `;
+        }
+
+        // Date
+        const dateEl = document.getElementById("detailShipmentDate");
+        if (dateEl) {
+            dateEl.textContent = s.shipment_date || "N/A";
+        }
+
+        // Sender
+        const senderEl = document.getElementById("detailShipmentSender");
+        const senderContactEl = document.getElementById("detailShipmentSenderContact");
+        if (senderEl) senderEl.textContent = s.sender_name || "N/A";
+        if (senderContactEl) {
+            const parts = [];
+            if (s.sender_phone) parts.push(s.sender_phone);
+            if (s.sender_email) parts.push(s.sender_email);
+            if (s.sender_address) parts.push(s.sender_address);
+            senderContactEl.textContent = parts.join(" • ") || "No contact info";
+        }
+
+        // Receiver
+        const receiverEl = document.getElementById("detailShipmentReceiver");
+        const receiverContactEl = document.getElementById("detailShipmentReceiverContact");
+        if (receiverEl) receiverEl.textContent = s.receiver_name || "N/A";
+        if (receiverContactEl) {
+            const parts = [];
+            if (s.receiver_phone) parts.push(s.receiver_phone);
+            if (s.receiver_email) parts.push(s.receiver_email);
+            if (s.receiver_address) parts.push(s.receiver_address);
+            receiverContactEl.textContent = parts.join(" • ") || "No contact info";
+        }
+
+        // Vehicle
+        const vehicleEl = document.getElementById("detailShipmentVehicle");
+        const vehicleTypeEl = document.getElementById("detailShipmentVehicleType");
+        if (vehicleEl) {
+            vehicleEl.textContent = s.vehicle_number ? `Vehicle: ${s.vehicle_number}` : "No vehicle assigned";
+        }
+        if (vehicleTypeEl) {
+            const parts = [];
+            if (s.vehicle_type) parts.push(`Type: ${s.vehicle_type}`);
+            if (s.vehicle_capacity) parts.push(`Capacity: ${s.vehicle_capacity} kg`);
+            vehicleTypeEl.textContent = parts.join(" • ") || "Standard Fleet";
+        }
+
+        // Employee
+        const empEl = document.getElementById("detailShipmentEmployee");
+        const empRoleEl = document.getElementById("detailShipmentEmployeeRole");
+        if (empEl) empEl.textContent = s.employee_name || "Operations Team";
+        if (empRoleEl) {
+            const parts = [];
+            if (s.employee_role) parts.push(s.employee_role);
+            if (s.employee_phone) parts.push(s.employee_phone);
+            empRoleEl.textContent = parts.join(" • ") || "Assigned Officer";
+        }
+
+        // Package Specifications
+        const pkgEl = document.getElementById("detailShipmentPackage");
+        if (pkgEl) {
+            pkgEl.innerHTML = `
+                <div style="display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px;">
+                    <span><strong>Type:</strong> ${escapeHtml(s.parcel_type || "Standard")}</span>
+                    <span><strong>Weight:</strong> ${s.weight ?? "N/A"} kg</span>
+                    <span><strong>Shipping Cost:</strong> ₹${s.shipping_cost ?? "0.00"}</span>
+                    <span><strong>Parcel ID:</strong> #${s.parcel_id}</span>
+                </div>
+            `;
+        }
+
+        // Tracking Timeline
+        const timelineEl = document.getElementById("detailShipmentTimeline");
+        if (timelineEl) {
+            const history = s.tracking_history || [];
+            if (history.length === 0) {
+                timelineEl.innerHTML = `
+                    <div style="padding: 16px; text-align: center; color: #94a3b8; font-size: 13px;">
+                        <i class="fa-solid fa-clock" style="margin-right: 6px;"></i>
+                        No tracking checkpoint scans recorded for this parcel yet.
+                    </div>
+                `;
+            } else {
+                timelineEl.innerHTML = history.map((event, idx) => {
+                    const isLatest = idx === history.length - 1;
+                    const iconClass = isLatest ? "fa-solid fa-location-dot" : "fa-solid fa-check";
+                    const iconBg = isLatest ? "background: rgba(56, 189, 248, 0.2); color: #38bdf8;" : "background: rgba(34, 197, 94, 0.2); color: #4ade80;";
+
+                    return `
+                        <div class="shipment-timeline-step">
+                            <div class="shipment-timeline-icon" style="${iconBg}">
+                                <i class="${iconClass}"></i>
+                            </div>
+                            <div class="shipment-timeline-content">
+                                <div class="shipment-timeline-header">
+                                    <span class="shipment-timeline-title">${escapeHtml(event.status || "Checkpoint")}</span>
+                                    <span class="shipment-timeline-time">${escapeHtml(event.update_time || "")}</span>
+                                </div>
+                                <div class="shipment-timeline-location">
+                                    <i class="fa-solid fa-building" style="font-size: 10px; color: #94a3b8;"></i>
+                                    <span>${escapeHtml(event.location || event.branch_name || "Transit Scan")}</span>
+                                </div>
+                                ${event.employee_name ? `<div class="shipment-timeline-employee">Handled by: ${escapeHtml(event.employee_name)}</div>` : ""}
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+            }
+        }
+
+        // Open modal
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+    } catch (error) {
+        console.error("Error viewing shipment details:", error);
+        showToast("Error", "Could not load shipment details from the server.");
+    }
+}
+
+
+function closeShipmentDetailsModal() {
+    const modal = document.getElementById("shipmentDetailsModal");
+    currentShipmentActiveTrackingNumber = null;
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+
+// =========================================================
+// VEHICLES MANAGEMENT
+// =========================================================
+
+let vehicleSearchDebounceTimer = null;
+
+function setupVehiclesView() {
+    const searchInput = document.getElementById("vehiclesSearchInput");
+    const typeFilter = document.getElementById("vehiclesTypeFilter");
+    const statusFilter = document.getElementById("vehiclesStatusFilter");
+    const clearButton = document.getElementById("clearVehiclesSearch");
+    const refreshButton = document.getElementById("refreshVehiclesButton");
+
+    if (searchInput) {
+        searchInput.addEventListener("input", () => {
+            clearTimeout(vehicleSearchDebounceTimer);
+            vehicleSearchDebounceTimer = setTimeout(() => {
+                loadVehiclesTable();
+            }, 300);
+        });
+    }
+
+    if (typeFilter) {
+        typeFilter.addEventListener("change", () => {
+            loadVehiclesTable();
+        });
+    }
+
+    if (statusFilter) {
+        statusFilter.addEventListener("change", () => {
+            loadVehiclesTable();
+        });
+    }
+
+    if (clearButton) {
+        clearButton.addEventListener("click", () => {
+            if (searchInput) searchInput.value = "";
+            if (typeFilter) typeFilter.value = "";
+            if (statusFilter) statusFilter.value = "";
+            loadVehiclesTable();
+        });
+    }
+
+    if (refreshButton) {
+        refreshButton.addEventListener("click", () => {
+            loadVehicleStats();
+            loadVehiclesTable();
+            showToast("Vehicles Refreshed", "Live fleet data and KPI metrics updated from database.");
+        });
+    }
+
+    // Modal listeners
+    const modal = document.getElementById("vehicleDetailsModal");
+    const closeBtn = document.getElementById("closeVehicleDetailsModal");
+    const closeActionBtn = document.getElementById("closeVehicleDetailsButton");
+
+    if (closeBtn) closeBtn.addEventListener("click", closeVehicleDetailsModal);
+    if (closeActionBtn) closeActionBtn.addEventListener("click", closeVehicleDetailsModal);
+
+    if (modal) {
+        modal.addEventListener("click", event => {
+            if (event.target === modal) {
+                closeVehicleDetailsModal();
+            }
+        });
+    }
+
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && modal && modal.classList.contains("show")) {
+            closeVehicleDetailsModal();
+        }
+    });
+}
+
+
+async function loadVehicleStats() {
+    try {
+        const response = await fetch("/api/vehicles/stats");
+        if (!response.ok) throw new Error("Failed to load vehicle stats");
+
+        const stats = await response.json();
+
+        const totalEl = document.getElementById("totalVehiclesCount");
+        const availEl = document.getElementById("availableVehiclesCount");
+        const inServEl = document.getElementById("inServiceVehiclesCount");
+        const capEl = document.getElementById("fleetCapacityCount");
+
+        if (totalEl) totalEl.textContent = stats.total_vehicles ?? 0;
+        if (availEl) availEl.textContent = stats.available ?? 0;
+        if (inServEl) inServEl.textContent = stats.in_service ?? 0;
+        if (capEl) {
+            const capVal = Math.round(Number(stats.total_capacity) || 0);
+            capEl.textContent = `${capVal.toLocaleString()} kg`;
+        }
+    } catch (error) {
+        console.error("Error loading vehicle stats:", error);
+    }
+}
+
+
+async function loadVehiclesTable() {
+    const tableBody = document.getElementById("vehiclesTableBody");
+    const countDisplay = document.getElementById("vehiclesCountDisplay");
+    const searchInput = document.getElementById("vehiclesSearchInput");
+    const typeFilter = document.getElementById("vehiclesTypeFilter");
+    const statusFilter = document.getElementById("vehiclesStatusFilter");
+
+    if (!tableBody) return;
+
+    const searchQuery = searchInput ? searchInput.value.trim() : "";
+    const selectedType = typeFilter ? typeFilter.value.trim() : "";
+    const selectedStatus = statusFilter ? statusFilter.value.trim() : "";
+
+    const params = new URLSearchParams();
+    if (searchQuery) params.append("search", searchQuery);
+    if (selectedType) params.append("type", selectedType);
+    if (selectedStatus) params.append("status", selectedStatus);
+
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="9" class="empty-state">
+                <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px;"></i>
+                Loading fleet records from database...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const url = `/api/vehicles${params.toString() ? `?${params.toString()}` : ""}`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error("Failed to load vehicles");
+        }
+
+        const vehicles = await response.json();
+
+        if (countDisplay) {
+            if (vehicles.length === 0) {
+                countDisplay.textContent = "0 vehicles found";
+            } else if (vehicles.length === 1) {
+                countDisplay.textContent = "1 vehicle found";
+            } else {
+                countDisplay.textContent = `${vehicles.length} vehicles found`;
+            }
+        }
+
+        renderVehiclesTable(vehicles);
+    } catch (error) {
+        console.error("Error loading vehicles:", error);
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="9" class="empty-state error-message">
+                    <i class="fa-solid fa-triangle-exclamation" style="margin-right: 8px;"></i>
+                    Failed to load vehicle records. Please try refreshing.
+                </td>
+            </tr>
+        `;
+        if (countDisplay) countDisplay.textContent = "Error loading vehicles";
+    }
+}
+
+
+function renderVehiclesTable(vehicles) {
+    const tableBody = document.getElementById("vehiclesTableBody");
+    if (!tableBody) return;
+
+    if (!vehicles || vehicles.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="9" class="empty-state">
+                    <div style="padding: 24px 0; text-align: center;">
+                        <i class="fa-solid fa-truck" style="font-size: 32px; color: #475569; margin-bottom: 12px; display: block;"></i>
+                        <strong style="color: #cbd5e1; font-size: 15px; display: block; margin-bottom: 4px;">No vehicles found</strong>
+                        <span style="color: #64748b; font-size: 13px;">No vehicle records match your filters or branch query.</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tableBody.innerHTML = vehicles.map(vehicle => {
+        const isInService = vehicle.status === "In Service";
+        const statusBadge = isInService
+            ? `<span class="status-badge in-transit"><span class="badge-dot"></span>In Service</span>`
+            : `<span class="status-badge delivered"><span class="badge-dot"></span>Available</span>`;
+
+        const activeCount = vehicle.active_shipments || 0;
+        const activeCountBadge = `<span class="count-pill" style="padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: ${activeCount > 0 ? 'rgba(56, 189, 248, 0.15)' : 'rgba(100, 116, 139, 0.15)'}; color: ${activeCount > 0 ? '#38bdf8' : '#94a3b8'}; border: 1px solid ${activeCount > 0 ? 'rgba(56, 189, 248, 0.3)' : 'rgba(100, 116, 139, 0.3)'};">${activeCount} ${activeCount === 1 ? 'shipment' : 'shipments'}</span>`;
+
+        return `
+            <tr class="clickable-row" data-vehicle-id="${vehicle.vehicle_id}">
+                <td>
+                    <span class="tracking-pill">
+                        #VH-${vehicle.vehicle_id}
+                    </span>
+                </td>
+                <td>
+                    <strong style="color: #f1f5f9; font-family: monospace; font-size: 13px;">
+                        ${escapeHtml(vehicle.vehicle_number)}
+                    </strong>
+                </td>
+                <td>
+                    <span>${escapeHtml(vehicle.vehicle_type || "N/A")}</span>
+                </td>
+                <td>
+                    <strong>${vehicle.capacity ? `${vehicle.capacity} kg` : "N/A"}</strong>
+                </td>
+                <td>
+                    <strong>${escapeHtml(vehicle.branch_name || "N/A")}</strong>
+                </td>
+                <td>
+                    <span>${escapeHtml(vehicle.city || "")}, ${escapeHtml(vehicle.state || "")}</span>
+                </td>
+                <td>
+                    ${statusBadge}
+                </td>
+                <td>
+                    ${activeCountBadge}
+                </td>
+                <td style="text-align: right;">
+                    <button
+                        class="secondary-button action-btn-view view-vehicle-btn"
+                        data-vehicle-id="${vehicle.vehicle_id}"
+                        title="Inspect Fleet Specifications and History"
+                    >
+                        <i class="fa-solid fa-eye"></i>
+                        <span>View</span>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join("");
+
+    tableBody.querySelectorAll(".clickable-row").forEach(row => {
+        row.addEventListener("click", event => {
+            if (event.target.closest("button")) return;
+            const vehicleId = row.getAttribute("data-vehicle-id");
+            if (vehicleId) viewVehicleDetails(vehicleId);
+        });
+    });
+
+    tableBody.querySelectorAll(".view-vehicle-btn").forEach(btn => {
+        btn.addEventListener("click", event => {
+            event.stopPropagation();
+            const vehicleId = btn.getAttribute("data-vehicle-id");
+            if (vehicleId) viewVehicleDetails(vehicleId);
+        });
+    });
+}
+
+
+async function viewVehicleDetails(vehicleId) {
+    const modal = document.getElementById("vehicleDetailsModal");
+    if (!modal) return;
+
+    try {
+        const response = await fetch(`/api/vehicles/${vehicleId}`);
+        if (!response.ok) {
+            throw new Error("Failed to load vehicle details");
+        }
+
+        const v = await response.json();
+
+        const numEl = document.getElementById("detailVehicleNumber");
+        const metaEl = document.getElementById("detailVehicleMeta");
+        const statusEl = document.getElementById("detailVehicleStatus");
+        const typeEl = document.getElementById("detailVehicleType");
+        const capEl = document.getElementById("detailVehicleCapacity");
+        const branchEl = document.getElementById("detailVehicleBranch");
+        const locEl = document.getElementById("detailVehicleLocation");
+        const shipmentsTable = document.getElementById("detailVehicleShipmentsTable");
+
+        if (numEl) numEl.textContent = v.vehicle_number || "Vehicle";
+        if (metaEl) metaEl.textContent = `Vehicle ID: #VH-${v.vehicle_id}`;
+
+        if (statusEl) {
+            const isInService = v.status === "In Service";
+            statusEl.innerHTML = isInService
+                ? `<span class="status-badge in-transit"><span class="badge-dot"></span>In Service</span>`
+                : `<span class="status-badge delivered"><span class="badge-dot"></span>Available</span>`;
+        }
+
+        if (typeEl) typeEl.textContent = v.vehicle_type || "N/A";
+        if (capEl) capEl.textContent = v.capacity ? `${v.capacity} kg` : "N/A";
+        if (branchEl) branchEl.textContent = v.branch_name || "N/A";
+        if (locEl) {
+            const parts = [];
+            if (v.city) parts.push(v.city);
+            if (v.state) parts.push(v.state);
+            if (v.branch_phone) parts.push(`Ph: ${v.branch_phone}`);
+            locEl.textContent = parts.join(" • ") || "No location details";
+        }
+
+        if (shipmentsTable) {
+            const shipments = v.recent_shipments || [];
+            if (shipments.length === 0) {
+                shipmentsTable.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="empty-state">No assigned shipments found for this vehicle.</td>
+                    </tr>
+                `;
+            } else {
+                shipmentsTable.innerHTML = shipments.map(s => `
+                    <tr>
+                        <td>
+                            <span class="tracking-pill">#SHP-${s.shipment_id}</span>
+                        </td>
+                        <td>
+                            <strong style="color: #f1f5f9; font-family: monospace; font-size: 13px;">${escapeHtml(s.tracking_number)}</strong>
+                        </td>
+                        <td>
+                            ${createStatusBadge(s.status || "Pending")}
+                        </td>
+                        <td>
+                            ${escapeHtml(s.parcel_type || "Standard")} (${s.weight ?? "N/A"} kg)
+                        </td>
+                        <td>
+                            ${escapeHtml(s.employee_name || "Assigned Officer")}
+                        </td>
+                        <td>
+                            ${escapeHtml(s.shipment_date || "N/A")}
+                        </td>
+                    </tr>
+                `).join("");
+            }
+        }
+
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+    } catch (error) {
+        console.error("Error viewing vehicle details:", error);
+        showToast("Error", "Could not load vehicle details from the server.");
+    }
+}
+
+
+function closeVehicleDetailsModal() {
+    const modal = document.getElementById("vehicleDetailsModal");
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+
+// =========================================================
+// ASSIGN SHIPMENT MODAL
+// =========================================================
+
+function setupAssignShipmentModal() {
+    const modal = document.getElementById("assignShipmentModal");
+    const form = document.getElementById("assignShipmentForm");
+    const closeBtn = document.getElementById("closeAssignShipmentModal");
+    const cancelBtn = document.getElementById("cancelAssignShipmentModal");
+
+    if (closeBtn) closeBtn.addEventListener("click", closeAssignShipmentModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeAssignShipmentModal);
+
+    if (modal) {
+        modal.addEventListener("click", event => {
+            if (event.target === modal) {
+                closeAssignShipmentModal();
+            }
+        });
+    }
+
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && modal && modal.classList.contains("show")) {
+            closeAssignShipmentModal();
+        }
+    });
+
+    if (form) {
+        form.addEventListener("submit", handleAssignShipmentSubmit);
+    }
+}
+
+
+async function openAssignShipmentModal() {
+    const modal = document.getElementById("assignShipmentModal");
+    const form = document.getElementById("assignShipmentForm");
+    const messageEl = document.getElementById("assignShipmentMessage");
+    const parcelSelect = document.getElementById("assignParcelSelect");
+    const vehicleSelect = document.getElementById("assignVehicleSelect");
+    const employeeSelect = document.getElementById("assignEmployeeSelect");
+    const parcelHint = document.getElementById("unassignedParcelHint");
+    const submitBtn = document.getElementById("submitAssignShipmentButton");
+
+    if (!modal) return;
+
+    if (form) form.reset();
+    if (messageEl) {
+        messageEl.textContent = "";
+        messageEl.className = "form-message";
+    }
+    if (parcelHint) parcelHint.textContent = "";
+
+    if (parcelSelect) parcelSelect.innerHTML = `<option value="">Loading unassigned parcels...</option>`;
+    if (vehicleSelect) vehicleSelect.innerHTML = `<option value="">Loading vehicles...</option>`;
+    if (employeeSelect) employeeSelect.innerHTML = `<option value="">Loading employees...</option>`;
+
+    modal.classList.add("show");
+    modal.setAttribute("aria-hidden", "false");
+
+    try {
+        const [parcelsRes, vehiclesRes, employeesRes] = await Promise.all([
+            fetch("/api/shipments/unassigned-parcels"),
+            fetch("/api/vehicles"),
+            fetch("/api/employees")
+        ]);
+
+        const parcels = parcelsRes.ok ? await parcelsRes.json() : [];
+        const vehicles = vehiclesRes.ok ? await vehiclesRes.json() : [];
+        const employees = employeesRes.ok ? await employeesRes.json() : [];
+
+        // 1. Populate Unassigned Parcels
+        if (parcelSelect) {
+            if (parcels.length === 0) {
+                parcelSelect.innerHTML = `<option value="">No unassigned parcels available (all parcels dispatched)</option>`;
+                if (parcelHint) {
+                    parcelHint.textContent = "All currently booked parcels already have shipments assigned in MySQL.";
+                }
+                if (submitBtn) submitBtn.disabled = true;
+            } else {
+                if (submitBtn) submitBtn.disabled = false;
+                parcelSelect.innerHTML = `
+                    <option value="">-- Choose an unassigned parcel --</option>
+                    ${parcels.map(p => `
+                        <option value="${p.parcel_id}" data-origin="${escapeHtml(p.origin_branch)}" data-dest="${escapeHtml(p.destination_branch)}">
+                            ${escapeHtml(p.tracking_number)} — ${escapeHtml(p.parcel_type)} (${p.weight} kg) | ${escapeHtml(p.origin_city)} → ${escapeHtml(p.destination_city)}
+                        </option>
+                    `).join("")}
+                `;
+
+                parcelSelect.onchange = () => {
+                    const opt = parcelSelect.options[parcelSelect.selectedIndex];
+                    if (opt && opt.value) {
+                        const origin = opt.getAttribute("data-origin") || "";
+                        const dest = opt.getAttribute("data-dest") || "";
+                        if (parcelHint) {
+                            parcelHint.textContent = `Route: ${origin} → ${dest}`;
+                        }
+                    } else if (parcelHint) {
+                        parcelHint.textContent = "";
+                    }
+                };
+            }
+        }
+
+        // 2. Populate Vehicles
+        if (vehicleSelect) {
+            vehicleSelect.innerHTML = `
+                <option value="">-- Choose a delivery vehicle --</option>
+                ${vehicles.map(v => `
+                    <option value="${v.vehicle_id}">
+                        ${escapeHtml(v.vehicle_number)} — ${escapeHtml(v.vehicle_type)} (${v.capacity} kg) [${escapeHtml(v.city)}] — ${v.status}
+                    </option>
+                `).join("")}
+            `;
+        }
+
+        // 3. Populate Employees
+        if (employeeSelect) {
+            employeeSelect.innerHTML = `
+                <option value="">-- Choose an operations officer --</option>
+                ${employees.map(e => `
+                    <option value="${e.employee_id}">
+                        ${escapeHtml(e.name)} — ${escapeHtml(e.role || "Officer")} [${escapeHtml(e.branch_name || "")}, ${escapeHtml(e.city || "")}]
+                    </option>
+                `).join("")}
+            `;
+        }
+
+    } catch (error) {
+        console.error("Error loading dropdown data for assignment:", error);
+        if (messageEl) {
+            messageEl.textContent = "Failed to load options from the database. Please try again.";
+            messageEl.className = "form-message error";
+        }
+    }
+}
+
+
+function closeAssignShipmentModal() {
+    const modal = document.getElementById("assignShipmentModal");
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+
+async function handleAssignShipmentSubmit(event) {
+    event.preventDefault();
+
+    const messageEl = document.getElementById("assignShipmentMessage");
+    const parcelSelect = document.getElementById("assignParcelSelect");
+    const vehicleSelect = document.getElementById("assignVehicleSelect");
+    const employeeSelect = document.getElementById("assignEmployeeSelect");
+    const submitBtn = document.getElementById("submitAssignShipmentButton");
+
+    const parcelId = parcelSelect ? parcelSelect.value : "";
+    const vehicleId = vehicleSelect ? vehicleSelect.value : "";
+    const employeeId = employeeSelect ? employeeSelect.value : "";
+
+    if (!parcelId || !vehicleId || !employeeId) {
+        if (messageEl) {
+            messageEl.textContent = "Please select a parcel, a vehicle, and an operations officer.";
+            messageEl.className = "form-message error";
+        }
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Assigning...</span>`;
+    }
+
+    try {
+        const response = await fetch("/api/shipments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                parcel_id: parseInt(parcelId, 10),
+                vehicle_id: parseInt(vehicleId, 10),
+                employee_id: parseInt(employeeId, 10)
+            })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || "Failed to create shipment dispatch");
+        }
+
+        closeAssignShipmentModal();
+        showToast("Shipment Dispatched", `Shipment #SHP-${result.shipment_id} assigned to ${result.vehicle_number} (${result.employee_name}).`);
+
+        // Refresh all relevant views
+        loadShipmentStats();
+        loadShipmentsTable();
+        loadVehicleStats();
+        loadVehiclesTable();
+        loadDashboard();
+
+    } catch (error) {
+        console.error("Error creating shipment:", error);
+        if (messageEl) {
+            messageEl.textContent = error.message || "An unexpected error occurred.";
+            messageEl.className = "form-message error";
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-truck-fast"></i><span>Assign &amp; Dispatch</span>`;
+        }
     }
 }

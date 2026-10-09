@@ -29,24 +29,342 @@ def home():
 @app.route("/api/customers", methods=["GET"])
 def get_customers():
 
-    db = get_db_connection()
+    search_query = request.args.get("search", "").strip()
+    activity_filter = request.args.get("activity", "").strip().lower()
 
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        conditions = []
+        params = []
+
+        if search_query:
+            conditions.append("""(
+                c.name LIKE %s
+                OR c.email LIKE %s
+                OR c.phone LIKE %s
+                OR c.address LIKE %s
+                OR CAST(c.customer_id AS CHAR) = %s
+            )""")
+            search_param = f"%{search_query}%"
+            params.extend([search_param, search_param, search_param, search_param, search_query])
+
+        if activity_filter == "active":
+            conditions.append("""(
+                (SELECT COUNT(*) FROM Parcel p WHERE p.sender_id = c.customer_id) +
+                (SELECT COUNT(*) FROM Parcel p WHERE p.receiver_id = c.customer_id)
+            ) > 0""")
+        elif activity_filter == "inactive":
+            conditions.append("""(
+                (SELECT COUNT(*) FROM Parcel p WHERE p.sender_id = c.customer_id) +
+                (SELECT COUNT(*) FROM Parcel p WHERE p.receiver_id = c.customer_id)
+            ) = 0""")
+
+        where_clause = ""
+        if conditions:
+            where_clause = f"WHERE {' AND '.join(conditions)}"
+
+        query = f"""
+            SELECT
+                c.customer_id,
+                c.name,
+                c.email,
+                c.phone,
+                c.address,
+                (SELECT COUNT(*) FROM Parcel p WHERE p.sender_id = c.customer_id) AS parcels_sent,
+                (SELECT COUNT(*) FROM Parcel p WHERE p.receiver_id = c.customer_id) AS parcels_received,
+                (
+                    (SELECT COUNT(*) FROM Parcel p WHERE p.sender_id = c.customer_id) +
+                    (SELECT COUNT(*) FROM Parcel p WHERE p.receiver_id = c.customer_id)
+                ) AS total_parcels,
+                (
+                    SELECT COUNT(DISTINCT s.shipment_id)
+                    FROM Shipment s
+                    JOIN Parcel p ON s.parcel_id = p.parcel_id
+                    WHERE p.sender_id = c.customer_id OR p.receiver_id = c.customer_id
+                ) AS total_shipments
+            FROM Customer c
+            {where_clause}
+            ORDER BY c.customer_id ASC
+        """
+        cursor.execute(query, tuple(params))
+        customers = cursor.fetchall()
+        return jsonify(customers)
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/customers/stats", methods=["GET"])
+def get_customer_stats():
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute("SELECT COUNT(*) AS total_customers FROM Customer")
+        total_customers = cursor.fetchone()["total_customers"] or 0
+
+        cursor.execute("""
+            SELECT COUNT(DISTINCT c.customer_id) AS active_customers
+            FROM Customer c
+            WHERE EXISTS (
+                SELECT 1 FROM Parcel p WHERE p.sender_id = c.customer_id OR p.receiver_id = c.customer_id
+            )
+        """)
+        active_customers = cursor.fetchone()["active_customers"] or 0
+        inactive_customers = max(0, total_customers - active_customers)
+
+        cursor.execute("SELECT COUNT(*) AS total_parcels FROM Parcel")
+        total_parcels = cursor.fetchone()["total_parcels"] or 0
+
+        cursor.execute("SELECT COUNT(*) AS total_shipments FROM Shipment")
+        total_shipments = cursor.fetchone()["total_shipments"] or 0
+
+        return jsonify({
+            "total_customers": total_customers,
+            "active_customers": active_customers,
+            "inactive_customers": inactive_customers,
+            "total_parcels": total_parcels,
+            "total_shipments": total_shipments
+        })
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/customers/<int:customer_id>", methods=["GET"])
+def get_customer(customer_id):
+
+    db = get_db_connection()
     try:
         cursor = db.cursor(dictionary=True)
 
         cursor.execute("""
-            SELECT
-                customer_id,
-                name,
-                email,
-                phone,
-                address
+            SELECT customer_id, name, email, phone, address
             FROM Customer
-            ORDER BY customer_id
-        """)
+            WHERE customer_id = %s
+        """, (customer_id,))
+        customer = cursor.fetchone()
 
-        return jsonify(cursor.fetchall())
+        if not customer:
+            return jsonify({"error": "Customer not found"}), 404
 
+        # Related parcels (sent or received)
+        cursor.execute("""
+            SELECT
+                p.parcel_id,
+                p.tracking_number,
+                CASE
+                    WHEN p.sender_id = %s THEN 'Sender'
+                    ELSE 'Receiver'
+                END AS role,
+                ob.branch_name AS origin_branch,
+                ob.city AS origin_city,
+                db.branch_name AS destination_branch,
+                db.city AS destination_city,
+                p.weight,
+                p.parcel_type,
+                p.shipping_cost,
+                p.status,
+                DATE_FORMAT(p.booking_date, '%Y-%m-%d %H:%i') AS booking_date
+            FROM Parcel p
+            JOIN Branch ob ON p.origin_branch_id = ob.branch_id
+            JOIN Branch db ON p.destination_branch_id = db.branch_id
+            WHERE p.sender_id = %s OR p.receiver_id = %s
+            ORDER BY p.booking_date DESC
+        """, (customer_id, customer_id, customer_id))
+        customer["parcels"] = cursor.fetchall()
+
+        # Related shipments
+        cursor.execute("""
+            SELECT
+                s.shipment_id,
+                p.tracking_number,
+                p.status,
+                CONCAT(ob.city, ' → ', db.city) AS route,
+                COALESCE(v.vehicle_number, 'N/A') AS vehicle_number,
+                COALESCE(v.vehicle_type, 'Standard') AS vehicle_type,
+                COALESCE(e.name, 'Unassigned') AS employee_name,
+                DATE_FORMAT(s.shipment_date, '%Y-%m-%d %H:%i') AS shipment_date
+            FROM Shipment s
+            JOIN Parcel p ON s.parcel_id = p.parcel_id
+            JOIN Branch ob ON p.origin_branch_id = ob.branch_id
+            JOIN Branch db ON p.destination_branch_id = db.branch_id
+            LEFT JOIN Vehicle v ON s.vehicle_id = v.vehicle_id
+            LEFT JOIN Employee e ON s.employee_id = e.employee_id
+            WHERE p.sender_id = %s OR p.receiver_id = %s
+            ORDER BY s.shipment_date DESC
+        """, (customer_id, customer_id))
+        customer["shipments"] = cursor.fetchall()
+
+        sent_count = sum(1 for p in customer["parcels"] if p["role"] == "Sender")
+        received_count = sum(1 for p in customer["parcels"] if p["role"] == "Receiver")
+        customer["parcels_sent"] = sent_count
+        customer["parcels_received"] = received_count
+        customer["total_parcels"] = len(customer["parcels"])
+        customer["total_shipments"] = len(customer["shipments"])
+
+        return jsonify(customer)
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/customers", methods=["POST"])
+def create_customer():
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    name = data.get("name", "").strip()
+    email = data.get("email", "").strip()
+    phone = data.get("phone", "").strip()
+    address = data.get("address", "").strip()
+
+    validation_error = validate_customer(name, email, phone, address)
+    if validation_error:
+        return jsonify({"error": validation_error}), 400
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute("SELECT customer_id FROM Customer WHERE email = %s", (email,))
+        if cursor.fetchone():
+            return jsonify({"error": "A customer with this email address already exists"}), 409
+
+        cursor.execute("SELECT customer_id FROM Customer WHERE phone = %s", (phone,))
+        if cursor.fetchone():
+            return jsonify({"error": "A customer with this phone number already exists"}), 409
+
+        cursor.execute("""
+            INSERT INTO Customer (name, email, phone, address)
+            VALUES (%s, %s, %s, %s)
+        """, (name, email, phone, address))
+        db.commit()
+
+        new_id = cursor.lastrowid
+        return jsonify({
+            "message": "Customer created successfully",
+            "customer_id": new_id,
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "address": address
+        }), 201
+
+    except Exception as error:
+        db.rollback()
+        return jsonify({"error": str(error)}), 500
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/customers/<int:customer_id>", methods=["PUT"])
+def update_customer(customer_id):
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    name = data.get("name", "").strip()
+    email = data.get("email", "").strip()
+    phone = data.get("phone", "").strip()
+    address = data.get("address", "").strip()
+
+    validation_error = validate_customer(name, email, phone, address)
+    if validation_error:
+        return jsonify({"error": validation_error}), 400
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute("SELECT customer_id FROM Customer WHERE customer_id = %s", (customer_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Customer not found"}), 404
+
+        cursor.execute("SELECT customer_id FROM Customer WHERE email = %s AND customer_id != %s", (email, customer_id))
+        if cursor.fetchone():
+            return jsonify({"error": "Another customer with this email address already exists"}), 409
+
+        cursor.execute("SELECT customer_id FROM Customer WHERE phone = %s AND customer_id != %s", (phone, customer_id))
+        if cursor.fetchone():
+            return jsonify({"error": "Another customer with this phone number already exists"}), 409
+
+        cursor.execute("""
+            UPDATE Customer
+            SET name = %s, email = %s, phone = %s, address = %s
+            WHERE customer_id = %s
+        """, (name, email, phone, address, customer_id))
+        db.commit()
+
+        return jsonify({
+            "message": "Customer updated successfully",
+            "customer_id": customer_id,
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "address": address
+        }), 200
+
+    except Exception as error:
+        db.rollback()
+        return jsonify({"error": str(error)}), 500
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/customers/<int:customer_id>", methods=["DELETE"])
+def delete_customer(customer_id):
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        cursor.execute("SELECT customer_id, name FROM Customer WHERE customer_id = %s", (customer_id,))
+        customer = cursor.fetchone()
+        if not customer:
+            return jsonify({"error": "Customer not found"}), 404
+
+        # Safe referential integrity check
+        cursor.execute("""
+            SELECT COUNT(*) AS count
+            FROM Parcel
+            WHERE sender_id = %s OR receiver_id = %s
+        """, (customer_id, customer_id))
+        parcel_count = cursor.fetchone()["count"]
+
+        cursor.execute("SELECT COUNT(*) AS count FROM Payment WHERE customer_id = %s", (customer_id,))
+        payment_count = cursor.fetchone()["count"]
+
+        cursor.execute("SELECT COUNT(*) AS count FROM Feedback WHERE customer_id = %s", (customer_id,))
+        feedback_count = cursor.fetchone()["count"]
+
+        total_linked = parcel_count + payment_count + feedback_count
+
+        if total_linked > 0:
+            return jsonify({
+                "error": f"Customer '{customer['name']}' is linked to {parcel_count} parcel(s) and existing records. Deletion blocked to preserve referential integrity.",
+                "can_delete": False,
+                "linked_parcels": parcel_count
+            }), 409
+
+        cursor.execute("DELETE FROM Customer WHERE customer_id = %s", (customer_id,))
+        db.commit()
+
+        return jsonify({
+            "message": f"Customer '{customer['name']}' deleted successfully",
+            "can_delete": True
+        }), 200
+
+    except Exception as error:
+        db.rollback()
+        return jsonify({"error": str(error)}), 500
     finally:
         cursor.close()
         db.close()

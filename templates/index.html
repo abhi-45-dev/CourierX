@@ -335,7 +335,7 @@
 
             <p class="nav-label">MANAGEMENT</p>
 
-            <a href="#" class="nav-item">
+            <a href="#" id="navCustomers" class="nav-item" data-view="customers">
                 <i class="fa-solid fa-users"></i>
                 <span>Customers</span>
             </a>
@@ -1660,7 +1660,158 @@
             </div>
 
         </section>
-
+ 
+ 
+        <!-- =====================================================
+             CUSTOMERS MANAGEMENT VIEW
+        ====================================================== -->
+        <section id="customersView" class="dashboard-content view-section" style="display: none;">
+ 
+            <!-- CUSTOMERS HEADER -->
+            <div class="panel customers-header-panel">
+                <div class="customers-header-info">
+                    <span class="eyebrow">
+                        CUSTOMER DIRECTORY
+                    </span>
+                    <h2>Customers</h2>
+                    <p>Manage customer profiles, contact information, and shipment activity.</p>
+                </div>
+ 
+                <div class="customers-header-actions">
+                    <button id="refreshCustomersButton" class="secondary-button" title="Refresh customer records">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Refresh</span>
+                    </button>
+                    <button id="newCustomerButton" class="primary-button" title="Add a new customer">
+                        <i class="fa-solid fa-user-plus"></i>
+                        <span>New Customer</span>
+                    </button>
+                </div>
+            </div>
+ 
+ 
+            <!-- CUSTOMER STATISTICS -->
+            <div class="customer-stats-grid">
+ 
+                <div class="panel customer-stat-card">
+                    <div class="stat-icon-wrap stat-icon-blue">
+                        <i class="fa-solid fa-users"></i>
+                    </div>
+                    <div>
+                        <span class="customer-stat-label">Total Customers</span>
+                        <h3 id="totalCustomersCount" class="customer-stat-value">...</h3>
+                    </div>
+                </div>
+ 
+                <div class="panel customer-stat-card">
+                    <div class="stat-icon-wrap stat-icon-green">
+                        <i class="fa-solid fa-user-check"></i>
+                    </div>
+                    <div>
+                        <span class="customer-stat-label">Active (With Shipments)</span>
+                        <h3 id="activeCustomersCount" class="customer-stat-value">...</h3>
+                    </div>
+                </div>
+ 
+                <div class="panel customer-stat-card">
+                    <div class="stat-icon-wrap stat-icon-amber">
+                        <i class="fa-solid fa-user-clock"></i>
+                    </div>
+                    <div>
+                        <span class="customer-stat-label">Inactive (No Parcels)</span>
+                        <h3 id="inactiveCustomersCount" class="customer-stat-value">...</h3>
+                    </div>
+                </div>
+ 
+                <div class="panel customer-stat-card">
+                    <div class="stat-icon-wrap stat-icon-purple">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                    </div>
+                    <div>
+                        <span class="customer-stat-label">Total Parcels</span>
+                        <h3 id="totalCustomerParcelsCount" class="customer-stat-value">...</h3>
+                    </div>
+                </div>
+ 
+            </div>
+ 
+ 
+            <!-- CUSTOMERS TOOLBAR -->
+            <div class="panel customers-toolbar-panel">
+ 
+                <div class="customers-toolbar">
+ 
+                    <div class="toolbar-search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input
+                            type="text"
+                            id="customersSearchInput"
+                            placeholder="Search by customer name, phone, email, address, or ID..."
+                        >
+                    </div>
+ 
+                    <div class="toolbar-filters">
+                        <select id="customersActivityFilter" class="toolbar-select">
+                            <option value="">All Activity</option>
+                            <option value="active">With Shipments</option>
+                            <option value="inactive">Without Shipments</option>
+                        </select>
+ 
+                        <button id="clearCustomersSearch" class="secondary-button toolbar-clear-btn">
+                            Clear
+                        </button>
+                    </div>
+ 
+                </div>
+ 
+                <div class="toolbar-meta">
+                    <span id="customersCountDisplay">Loading customers...</span>
+                    <span class="toolbar-hint">
+                        <i class="fa-solid fa-circle-info"></i>
+                        Click any customer row or view button to inspect complete parcel history and dispatches
+                    </span>
+                </div>
+ 
+            </div>
+ 
+ 
+            <!-- CUSTOMERS TABLE -->
+            <div class="panel">
+ 
+                <div class="table-wrapper">
+ 
+                    <table id="customersTable">
+ 
+                        <thead>
+                            <tr>
+                                <th>Customer ID</th>
+                                <th>Customer Name</th>
+                                <th>Phone</th>
+                                <th>Email</th>
+                                <th>Address</th>
+                                <th>Parcels Sent</th>
+                                <th>Parcels Received</th>
+                                <th>Total Shipments</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+ 
+                        <tbody id="customersTableBody">
+                            <tr>
+                                <td colspan="9" class="empty-state">
+                                    Loading customer records...
+                                </td>
+                            </tr>
+                        </tbody>
+ 
+                    </table>
+ 
+                </div>
+ 
+            </div>
+ 
+        </section>
+ 
     </main>
 
 </div>
@@ -2827,6 +2978,287 @@
                 >
                     <i class="fa-solid fa-truck-fast"></i>
                     <span>Assign &amp; Dispatch</span>
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     CUSTOMER DETAILS MODAL
+========================================================== -->
+
+<div
+    id="customerDetailsModal"
+    class="modal-overlay"
+    aria-hidden="true"
+>
+
+    <div class="modal-card customer-details-card">
+
+        <div class="modal-header">
+
+            <div>
+                <span class="eyebrow">
+                    CUSTOMER PROFILE
+                </span>
+                <h2 id="detailCustomerName">
+                    Customer Name
+                </h2>
+                <p id="detailCustomerMeta">
+                    Customer ID: #CUST-0
+                </p>
+            </div>
+
+            <button
+                id="closeCustomerDetailsModal"
+                class="modal-close"
+                type="button"
+            >
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </div>
+
+        <div class="customer-modal-body">
+
+            <div class="customer-info-grid">
+
+                <div class="customer-info-card">
+                    <span class="info-card-label">Mobile Phone</span>
+                    <div id="detailCustomerPhone" class="info-card-value">...</div>
+                </div>
+
+                <div class="customer-info-card">
+                    <span class="info-card-label">Email Address</span>
+                    <div id="detailCustomerEmail" class="info-card-value">...</div>
+                </div>
+
+                <div class="customer-info-card full-span">
+                    <span class="info-card-label">Postal / Delivery Address</span>
+                    <div id="detailCustomerAddress" class="info-card-value">...</div>
+                </div>
+
+                <div class="customer-info-card">
+                    <span class="info-card-label">Parcels Sent</span>
+                    <div id="detailCustomerParcelsSent" class="info-card-value">0</div>
+                </div>
+
+                <div class="customer-info-card">
+                    <span class="info-card-label">Parcels Received</span>
+                    <div id="detailCustomerParcelsReceived" class="info-card-value">0</div>
+                </div>
+
+                <div class="customer-info-card">
+                    <span class="info-card-label">Total Shipments Dispatched</span>
+                    <div id="detailCustomerShipments" class="info-card-value">0</div>
+                </div>
+
+            </div>
+
+            <!-- CUSTOMER PARCELS HISTORY -->
+            <div class="recent-customer-section">
+                <h4>
+                    <i class="fa-solid fa-box-archive"></i>
+                    Associated Parcels History
+                </h4>
+                <div class="table-wrapper">
+                    <table class="subtable">
+                        <thead>
+                            <tr>
+                                <th>Tracking Number</th>
+                                <th>Role</th>
+                                <th>Route</th>
+                                <th>Type / Weight</th>
+                                <th>Status</th>
+                                <th>Booking Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailCustomerParcelsTable">
+                            <tr>
+                                <td colspan="6" class="empty-state">No parcel history found</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- CUSTOMER SHIPMENTS HISTORY -->
+            <div class="recent-customer-section">
+                <h4>
+                    <i class="fa-solid fa-truck-fast"></i>
+                    Associated Shipments &amp; Dispatches
+                </h4>
+                <div class="table-wrapper">
+                    <table class="subtable">
+                        <thead>
+                            <tr>
+                                <th>Shipment ID</th>
+                                <th>Tracking Number</th>
+                                <th>Route</th>
+                                <th>Vehicle</th>
+                                <th>Officer</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailCustomerShipmentsTable">
+                            <tr>
+                                <td colspan="6" class="empty-state">No shipments history found</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="modal-actions">
+
+            <button
+                type="button"
+                id="editCustomerFromDetailsButton"
+                class="primary-button"
+            >
+                <i class="fa-solid fa-pen-to-square"></i>
+                <span>Edit Customer</span>
+            </button>
+
+            <button
+                type="button"
+                id="closeCustomerDetailsButton"
+                class="secondary-button"
+            >
+                Close
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     CREATE / EDIT CUSTOMER MODAL
+========================================================== -->
+
+<div
+    id="customerModal"
+    class="modal-overlay"
+    aria-hidden="true"
+>
+
+    <div class="modal-card customer-modal-card">
+
+        <div class="modal-header">
+
+            <div>
+                <span class="eyebrow">
+                    CUSTOMER DIRECTORY
+                </span>
+                <h2 id="customerModalTitle">
+                    New Customer
+                </h2>
+                <p id="customerModalSubtitle">
+                    Register a new customer profile.
+                </p>
+            </div>
+
+            <button
+                id="closeCustomerModal"
+                class="modal-close"
+                type="button"
+            >
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+        </div>
+
+        <form id="customerForm" class="modal-form">
+
+            <input type="hidden" id="customerFormId" value="">
+
+            <div class="form-section">
+
+                <div class="form-group full-width">
+                    <label for="customerNameInput">
+                        Full Name <span style="color: #f87171;">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="customerNameInput"
+                        placeholder="e.g. Vikramaditya Rao"
+                        required
+                    >
+                </div>
+
+                <div class="form-grid">
+
+                    <div class="form-group">
+                        <label for="customerEmailInput">
+                            Email Address <span style="color: #f87171;">*</span>
+                        </label>
+                        <input
+                            type="email"
+                            id="customerEmailInput"
+                            placeholder="e.g. vikram.rao@example.in"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="customerPhoneInput">
+                            Mobile Phone (10 digits) <span style="color: #f87171;">*</span>
+                        </label>
+                        <input
+                            type="tel"
+                            id="customerPhoneInput"
+                            placeholder="e.g. 9849123459"
+                            maxlength="10"
+                            required
+                        >
+                    </div>
+
+                </div>
+
+                <div class="form-group full-width">
+                    <label for="customerAddressInput">
+                        Street Address &amp; Location <span style="color: #f87171;">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="customerAddressInput"
+                        placeholder="e.g. Plot 78, Road No. 36, Jubilee Hills, Hyderabad"
+                        required
+                    >
+                </div>
+
+            </div>
+
+            <div id="customerFormMessage" class="form-message"></div>
+
+            <div class="modal-actions">
+
+                <button
+                    type="button"
+                    id="cancelCustomerModal"
+                    class="secondary-button"
+                >
+                    Cancel
+                </button>
+
+                <button
+                    type="submit"
+                    id="submitCustomerButton"
+                    class="primary-button"
+                >
+                    <i class="fa-solid fa-check"></i>
+                    <span>Save Customer</span>
                 </button>
 
             </div>

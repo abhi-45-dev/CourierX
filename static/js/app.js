@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupBranchesView();
     setupShipmentsView();
     setupVehiclesView();
+    setupCustomersView();
     setupAssignShipmentModal();
     loadDashboard();
     loadCustomers();
@@ -1636,6 +1637,7 @@ function setupNavigation() {
     const navParcels = document.getElementById("navParcels");
     const navShipments = document.getElementById("navShipments");
     const navVehicles = document.getElementById("navVehicles");
+    const navCustomers = document.getElementById("navCustomers");
     const navBranches = document.getElementById("navBranches");
     const viewAllButton = document.getElementById("viewAllParcelsButton");
     const assignShipmentButton = document.getElementById("assignShipmentButton");
@@ -1666,6 +1668,13 @@ function setupNavigation() {
         navVehicles.addEventListener("click", event => {
             event.preventDefault();
             switchToView("vehicles");
+        });
+    }
+
+    if (navCustomers) {
+        navCustomers.addEventListener("click", event => {
+            event.preventDefault();
+            switchToView("customers");
         });
     }
 
@@ -1704,11 +1713,13 @@ function switchToView(viewName) {
     const parcelsView = document.getElementById("parcelsView");
     const shipmentsView = document.getElementById("shipmentsView");
     const vehiclesView = document.getElementById("vehiclesView");
+    const customersView = document.getElementById("customersView");
     const branchesView = document.getElementById("branchesView");
     const navDashboard = document.getElementById("navDashboard");
     const navParcels = document.getElementById("navParcels");
     const navShipments = document.getElementById("navShipments");
     const navVehicles = document.getElementById("navVehicles");
+    const navCustomers = document.getElementById("navCustomers");
     const navBranches = document.getElementById("navBranches");
     const topbarTitle = document.getElementById("topbarTitle");
     const topbarSubtitle = document.getElementById("topbarSubtitle");
@@ -1717,12 +1728,14 @@ function switchToView(viewName) {
         if (dashboardView) dashboardView.style.display = "none";
         if (parcelsView) parcelsView.style.display = "none";
         if (vehiclesView) vehiclesView.style.display = "none";
+        if (customersView) customersView.style.display = "none";
         if (branchesView) branchesView.style.display = "none";
         if (shipmentsView) shipmentsView.style.display = "block";
 
         if (navDashboard) navDashboard.classList.remove("active");
         if (navParcels) navParcels.classList.remove("active");
         if (navVehicles) navVehicles.classList.remove("active");
+        if (navCustomers) navCustomers.classList.remove("active");
         if (navBranches) navBranches.classList.remove("active");
         if (navShipments) navShipments.classList.add("active");
 
@@ -1735,12 +1748,14 @@ function switchToView(viewName) {
         if (dashboardView) dashboardView.style.display = "none";
         if (parcelsView) parcelsView.style.display = "none";
         if (shipmentsView) shipmentsView.style.display = "none";
+        if (customersView) customersView.style.display = "none";
         if (branchesView) branchesView.style.display = "none";
         if (vehiclesView) vehiclesView.style.display = "block";
 
         if (navDashboard) navDashboard.classList.remove("active");
         if (navParcels) navParcels.classList.remove("active");
         if (navShipments) navShipments.classList.remove("active");
+        if (navCustomers) navCustomers.classList.remove("active");
         if (navBranches) navBranches.classList.remove("active");
         if (navVehicles) navVehicles.classList.add("active");
 
@@ -1749,17 +1764,39 @@ function switchToView(viewName) {
 
         loadVehicleStats();
         loadVehiclesTable();
+    } else if (viewName === "customers") {
+        if (dashboardView) dashboardView.style.display = "none";
+        if (parcelsView) parcelsView.style.display = "none";
+        if (shipmentsView) shipmentsView.style.display = "none";
+        if (vehiclesView) vehiclesView.style.display = "none";
+        if (branchesView) branchesView.style.display = "none";
+        if (customersView) customersView.style.display = "block";
+
+        if (navDashboard) navDashboard.classList.remove("active");
+        if (navParcels) navParcels.classList.remove("active");
+        if (navShipments) navShipments.classList.remove("active");
+        if (navVehicles) navVehicles.classList.remove("active");
+        if (navBranches) navBranches.classList.remove("active");
+        if (navCustomers) navCustomers.classList.add("active");
+
+        if (topbarTitle) topbarTitle.textContent = "Customers";
+        if (topbarSubtitle) topbarSubtitle.textContent = "Manage customer profiles, contact information, and shipment activity.";
+
+        loadCustomerStats();
+        loadCustomersTable();
     } else if (viewName === "branches") {
         if (dashboardView) dashboardView.style.display = "none";
         if (parcelsView) parcelsView.style.display = "none";
         if (shipmentsView) shipmentsView.style.display = "none";
         if (vehiclesView) vehiclesView.style.display = "none";
+        if (customersView) customersView.style.display = "none";
         if (branchesView) branchesView.style.display = "block";
 
         if (navDashboard) navDashboard.classList.remove("active");
         if (navParcels) navParcels.classList.remove("active");
         if (navShipments) navShipments.classList.remove("active");
         if (navVehicles) navVehicles.classList.remove("active");
+        if (navCustomers) navCustomers.classList.remove("active");
         if (navBranches) navBranches.classList.add("active");
 
         if (topbarTitle) topbarTitle.textContent = "Branch Management";
@@ -1772,12 +1809,14 @@ function switchToView(viewName) {
         if (branchesView) branchesView.style.display = "none";
         if (shipmentsView) shipmentsView.style.display = "none";
         if (vehiclesView) vehiclesView.style.display = "none";
+        if (customersView) customersView.style.display = "none";
         if (parcelsView) parcelsView.style.display = "block";
 
         if (navDashboard) navDashboard.classList.remove("active");
         if (navBranches) navBranches.classList.remove("active");
         if (navShipments) navShipments.classList.remove("active");
         if (navVehicles) navVehicles.classList.remove("active");
+        if (navCustomers) navCustomers.classList.remove("active");
         if (navParcels) navParcels.classList.add("active");
 
         if (topbarTitle) topbarTitle.textContent = "Parcels";
@@ -1789,12 +1828,14 @@ function switchToView(viewName) {
         if (branchesView) branchesView.style.display = "none";
         if (shipmentsView) shipmentsView.style.display = "none";
         if (vehiclesView) vehiclesView.style.display = "none";
+        if (customersView) customersView.style.display = "none";
         if (dashboardView) dashboardView.style.display = "block";
 
         if (navParcels) navParcels.classList.remove("active");
         if (navBranches) navBranches.classList.remove("active");
         if (navShipments) navShipments.classList.remove("active");
         if (navVehicles) navVehicles.classList.remove("active");
+        if (navCustomers) navCustomers.classList.remove("active");
         if (navDashboard) navDashboard.classList.add("active");
 
         if (topbarTitle) topbarTitle.textContent = "Dashboard";
@@ -3733,5 +3774,639 @@ async function handleAssignShipmentSubmit(event) {
             submitBtn.disabled = false;
             submitBtn.innerHTML = `<i class="fa-solid fa-truck-fast"></i><span>Assign &amp; Dispatch</span>`;
         }
+    }
+}
+
+
+// =========================================================
+// CUSTOMERS MANAGEMENT
+// =========================================================
+
+let customerSearchDebounceTimer = null;
+let currentViewingCustomerId = null;
+
+function setupCustomersView() {
+    const searchInput = document.getElementById("customersSearchInput");
+    const activityFilter = document.getElementById("customersActivityFilter");
+    const clearButton = document.getElementById("clearCustomersSearch");
+    const refreshButton = document.getElementById("refreshCustomersButton");
+    const newCustomerButton = document.getElementById("newCustomerButton");
+
+    if (searchInput) {
+        searchInput.addEventListener("input", () => {
+            clearTimeout(customerSearchDebounceTimer);
+            customerSearchDebounceTimer = setTimeout(() => {
+                loadCustomersTable();
+            }, 300);
+        });
+    }
+
+    if (activityFilter) {
+        activityFilter.addEventListener("change", () => {
+            loadCustomersTable();
+        });
+    }
+
+    if (clearButton) {
+        clearButton.addEventListener("click", () => {
+            if (searchInput) searchInput.value = "";
+            if (activityFilter) activityFilter.value = "";
+            loadCustomersTable();
+        });
+    }
+
+    if (refreshButton) {
+        refreshButton.addEventListener("click", () => {
+            loadCustomerStats();
+            loadCustomersTable();
+            showToast("Customers Refreshed", "Live customer profiles and KPIs updated from database.");
+        });
+    }
+
+    if (newCustomerButton) {
+        newCustomerButton.addEventListener("click", () => {
+            openCustomerModal();
+        });
+    }
+
+    // Customer Details Modal listeners
+    const detailsModal = document.getElementById("customerDetailsModal");
+    const closeDetailsBtn = document.getElementById("closeCustomerDetailsModal");
+    const closeDetailsActionBtn = document.getElementById("closeCustomerDetailsButton");
+    const editFromDetailsBtn = document.getElementById("editCustomerFromDetailsButton");
+
+    if (closeDetailsBtn) closeDetailsBtn.addEventListener("click", closeCustomerDetailsModal);
+    if (closeDetailsActionBtn) closeDetailsActionBtn.addEventListener("click", closeCustomerDetailsModal);
+
+    if (editFromDetailsBtn) {
+        editFromDetailsBtn.addEventListener("click", () => {
+            const customerId = currentViewingCustomerId;
+            closeCustomerDetailsModal();
+            if (customerId) {
+                openCustomerModal(customerId);
+            }
+        });
+    }
+
+    if (detailsModal) {
+        detailsModal.addEventListener("click", event => {
+            if (event.target === detailsModal) {
+                closeCustomerDetailsModal();
+            }
+        });
+    }
+
+    // Customer Create/Edit Modal listeners
+    const customerModal = document.getElementById("customerModal");
+    const closeCustomerModalBtn = document.getElementById("closeCustomerModal");
+    const cancelCustomerModalBtn = document.getElementById("cancelCustomerModal");
+    const customerForm = document.getElementById("customerForm");
+
+    if (closeCustomerModalBtn) closeCustomerModalBtn.addEventListener("click", closeCustomerModal);
+    if (cancelCustomerModalBtn) cancelCustomerModalBtn.addEventListener("click", closeCustomerModal);
+
+    if (customerModal) {
+        customerModal.addEventListener("click", event => {
+            if (event.target === customerModal) {
+                closeCustomerModal();
+            }
+        });
+    }
+
+    if (customerForm) {
+        customerForm.addEventListener("submit", handleCustomerFormSubmit);
+    }
+
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape") {
+            if (detailsModal && detailsModal.classList.contains("show")) {
+                closeCustomerDetailsModal();
+            }
+            if (customerModal && customerModal.classList.contains("show")) {
+                closeCustomerModal();
+            }
+        }
+    });
+}
+
+
+async function loadCustomerStats() {
+    try {
+        const response = await fetch("/api/customers/stats");
+        if (!response.ok) throw new Error("Failed to load customer stats");
+
+        const stats = await response.json();
+
+        const totalEl = document.getElementById("totalCustomersCount");
+        const activeEl = document.getElementById("activeCustomersCount");
+        const inactiveEl = document.getElementById("inactiveCustomersCount");
+        const parcelsEl = document.getElementById("totalCustomerParcelsCount");
+
+        if (totalEl) totalEl.textContent = stats.total_customers ?? 0;
+        if (activeEl) activeEl.textContent = stats.active_customers ?? 0;
+        if (inactiveEl) inactiveEl.textContent = stats.inactive_customers ?? 0;
+        if (parcelsEl) parcelsEl.textContent = stats.total_parcels ?? 0;
+    } catch (error) {
+        console.error("Error loading customer stats:", error);
+    }
+}
+
+
+async function loadCustomersTable() {
+    const tableBody = document.getElementById("customersTableBody");
+    const countDisplay = document.getElementById("customersCountDisplay");
+    const searchInput = document.getElementById("customersSearchInput");
+    const activityFilter = document.getElementById("customersActivityFilter");
+
+    if (!tableBody) return;
+
+    const searchQuery = searchInput ? searchInput.value.trim() : "";
+    const selectedActivity = activityFilter ? activityFilter.value.trim() : "";
+
+    const params = new URLSearchParams();
+    if (searchQuery) params.append("search", searchQuery);
+    if (selectedActivity) params.append("activity", selectedActivity);
+
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="9" class="empty-state">
+                <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px;"></i>
+                Loading customer profiles from database...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const url = `/api/customers${params.toString() ? `?${params.toString()}` : ""}`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error("Failed to load customers");
+        }
+
+        const customers = await response.json();
+
+        if (countDisplay) {
+            if (customers.length === 0) {
+                countDisplay.textContent = "0 customers found";
+            } else if (customers.length === 1) {
+                countDisplay.textContent = "1 customer found";
+            } else {
+                countDisplay.textContent = `${customers.length} customers found`;
+            }
+        }
+
+        renderCustomersTable(customers);
+    } catch (error) {
+        console.error("Error loading customers:", error);
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="9" class="empty-state error-message">
+                    <i class="fa-solid fa-triangle-exclamation" style="margin-right: 8px;"></i>
+                    Failed to load customer records. Please try refreshing.
+                </td>
+            </tr>
+        `;
+        if (countDisplay) countDisplay.textContent = "Error loading customers";
+    }
+}
+
+
+function renderCustomersTable(customers) {
+    const tableBody = document.getElementById("customersTableBody");
+    if (!tableBody) return;
+
+    if (!customers || customers.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="9" class="empty-state">
+                    <div style="padding: 24px 0; text-align: center;">
+                        <i class="fa-solid fa-user-slash" style="font-size: 32px; color: #475569; margin-bottom: 12px; display: block;"></i>
+                        <strong style="color: #cbd5e1; font-size: 15px; display: block; margin-bottom: 4px;">No customers found</strong>
+                        <span style="color: #64748b; font-size: 13px;">No customer records match your current filters or query.</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tableBody.innerHTML = customers.map(c => {
+        const hasActivity = (c.total_parcels || 0) > 0;
+        const activityBadge = hasActivity
+            ? `<span class="count-pill" style="padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">${c.total_shipments || 0} shipments</span>`
+            : `<span class="count-pill" style="padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600; background: rgba(100, 116, 139, 0.15); color: #94a3b8; border: 1px solid rgba(100, 116, 139, 0.3);">0 shipments</span>`;
+
+        return `
+            <tr class="clickable-row" data-customer-id="${c.customer_id}">
+                <td>
+                    <span class="tracking-pill">
+                        #CUST-${c.customer_id}
+                    </span>
+                </td>
+                <td>
+                    <strong style="color: #f1f5f9; font-size: 13.5px;">
+                        ${escapeHtml(c.name)}
+                    </strong>
+                </td>
+                <td>
+                    <span style="font-family: monospace; color: #cbd5e1; font-size: 13px;">
+                        ${escapeHtml(c.phone || "N/A")}
+                    </span>
+                </td>
+                <td>
+                    <span style="color: #94a3b8; font-size: 13px;">
+                        ${escapeHtml(c.email || "N/A")}
+                    </span>
+                </td>
+                <td>
+                    <span style="color: #cbd5e1; font-size: 13px; max-width: 220px; display: inline-block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(c.address || "")}">
+                        ${escapeHtml(c.address || "N/A")}
+                    </span>
+                </td>
+                <td>
+                    <span style="color: #cbd5e1; font-size: 13px; font-weight: 600;">
+                        ${c.parcels_sent ?? 0} sent
+                    </span>
+                </td>
+                <td>
+                    <span style="color: #cbd5e1; font-size: 13px; font-weight: 600;">
+                        ${c.parcels_received ?? 0} rec'd
+                    </span>
+                </td>
+                <td>
+                    ${activityBadge}
+                </td>
+                <td style="text-align: right; white-space: nowrap;">
+                    <div style="display: inline-flex; gap: 6px;">
+                        <button
+                            class="secondary-button action-btn-view view-customer-btn"
+                            data-customer-id="${c.customer_id}"
+                            title="Inspect Profile &amp; Parcels"
+                        >
+                            <i class="fa-solid fa-eye"></i>
+                            <span>View</span>
+                        </button>
+                        <button
+                            class="secondary-button action-btn-edit edit-customer-btn"
+                            data-customer-id="${c.customer_id}"
+                            title="Edit Customer Profile"
+                        >
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button
+                            class="secondary-button action-btn-delete delete-customer-btn"
+                            data-customer-id="${c.customer_id}"
+                            data-customer-name="${escapeHtml(c.name)}"
+                            title="Delete Customer Profile"
+                        >
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join("");
+
+    // Bind row clicks
+    tableBody.querySelectorAll(".clickable-row").forEach(row => {
+        row.addEventListener("click", event => {
+            if (event.target.closest("button")) return;
+            const customerId = row.getAttribute("data-customer-id");
+            if (customerId) viewCustomerDetails(customerId);
+        });
+    });
+
+    // Bind action buttons
+    tableBody.querySelectorAll(".view-customer-btn").forEach(btn => {
+        btn.addEventListener("click", event => {
+            event.stopPropagation();
+            const customerId = btn.getAttribute("data-customer-id");
+            if (customerId) viewCustomerDetails(customerId);
+        });
+    });
+
+    tableBody.querySelectorAll(".edit-customer-btn").forEach(btn => {
+        btn.addEventListener("click", event => {
+            event.stopPropagation();
+            const customerId = btn.getAttribute("data-customer-id");
+            if (customerId) openCustomerModal(customerId);
+        });
+    });
+
+    tableBody.querySelectorAll(".delete-customer-btn").forEach(btn => {
+        btn.addEventListener("click", event => {
+            event.stopPropagation();
+            const customerId = btn.getAttribute("data-customer-id");
+            const customerName = btn.getAttribute("data-customer-name") || "this customer";
+            if (customerId) deleteCustomer(customerId, customerName);
+        });
+    });
+}
+
+
+async function viewCustomerDetails(customerId) {
+    const modal = document.getElementById("customerDetailsModal");
+    if (!modal) return;
+
+    try {
+        const response = await fetch(`/api/customers/${customerId}`);
+        if (!response.ok) {
+            throw new Error("Failed to load customer details");
+        }
+
+        const c = await response.json();
+        currentViewingCustomerId = c.customer_id;
+
+        const nameEl = document.getElementById("detailCustomerName");
+        const metaEl = document.getElementById("detailCustomerMeta");
+        const phoneEl = document.getElementById("detailCustomerPhone");
+        const emailEl = document.getElementById("detailCustomerEmail");
+        const addressEl = document.getElementById("detailCustomerAddress");
+        const sentEl = document.getElementById("detailCustomerParcelsSent");
+        const recEl = document.getElementById("detailCustomerParcelsReceived");
+        const shipEl = document.getElementById("detailCustomerShipments");
+        const parcelsTable = document.getElementById("detailCustomerParcelsTable");
+        const shipmentsTable = document.getElementById("detailCustomerShipmentsTable");
+
+        if (nameEl) nameEl.textContent = c.name || "Customer";
+        if (metaEl) metaEl.textContent = `Customer ID: #CUST-${c.customer_id}`;
+        if (phoneEl) phoneEl.textContent = c.phone || "N/A";
+        if (emailEl) emailEl.textContent = c.email || "N/A";
+        if (addressEl) addressEl.textContent = c.address || "N/A";
+        if (sentEl) sentEl.textContent = `${c.parcels_sent ?? 0} parcel(s)`;
+        if (recEl) recEl.textContent = `${c.parcels_received ?? 0} parcel(s)`;
+        if (shipEl) shipEl.textContent = `${c.total_shipments ?? 0} shipment(s)`;
+
+        // Render Parcels History
+        if (parcelsTable) {
+            const parcels = c.parcels || [];
+            if (parcels.length === 0) {
+                parcelsTable.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="empty-state">No associated parcels recorded for this customer.</td>
+                    </tr>
+                `;
+            } else {
+                parcelsTable.innerHTML = parcels.map(p => `
+                    <tr>
+                        <td>
+                            <strong style="color: #f1f5f9; font-family: monospace; font-size: 13px;">${escapeHtml(p.tracking_number)}</strong>
+                        </td>
+                        <td>
+                            <span class="count-pill" style="padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; background: ${p.role === 'Sender' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(34, 197, 94, 0.15)'}; color: ${p.role === 'Sender' ? '#38bdf8' : '#4ade80'};">
+                                ${p.role}
+                            </span>
+                        </td>
+                        <td>
+                            <span style="font-size: 12.5px; color: #cbd5e1;">${escapeHtml(p.origin_city)} → ${escapeHtml(p.destination_city)}</span>
+                        </td>
+                        <td>
+                            <span style="font-size: 12px; color: #94a3b8;">${escapeHtml(p.parcel_type)} (${p.weight} kg)</span>
+                        </td>
+                        <td>
+                            ${createStatusBadge(p.status || "Pending")}
+                        </td>
+                        <td>
+                            <span style="font-size: 12px; color: #94a3b8;">${escapeHtml(p.booking_date || "N/A")}</span>
+                        </td>
+                    </tr>
+                `).join("");
+            }
+        }
+
+        // Render Shipments History
+        if (shipmentsTable) {
+            const shipments = c.shipments || [];
+            if (shipments.length === 0) {
+                shipmentsTable.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="empty-state">No dispatched shipments associated with this customer.</td>
+                    </tr>
+                `;
+            } else {
+                shipmentsTable.innerHTML = shipments.map(s => `
+                    <tr>
+                        <td>
+                            <span class="tracking-pill">#SHP-${s.shipment_id}</span>
+                        </td>
+                        <td>
+                            <strong style="color: #f1f5f9; font-family: monospace; font-size: 13px;">${escapeHtml(s.tracking_number)}</strong>
+                        </td>
+                        <td>
+                            <span style="font-size: 12.5px; color: #cbd5e1;">${escapeHtml(s.route)}</span>
+                        </td>
+                        <td>
+                            <span style="font-size: 12.5px; font-family: monospace; color: #f8fafc;">${escapeHtml(s.vehicle_number)}</span>
+                        </td>
+                        <td>
+                            <span style="font-size: 12.5px; color: #cbd5e1;">${escapeHtml(s.employee_name)}</span>
+                        </td>
+                        <td>
+                            <span style="font-size: 12px; color: #94a3b8;">${escapeHtml(s.shipment_date || "N/A")}</span>
+                        </td>
+                    </tr>
+                `).join("");
+            }
+        }
+
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+    } catch (error) {
+        console.error("Error viewing customer details:", error);
+        showToast("Error", "Could not load customer profile from the server.");
+    }
+}
+
+
+function closeCustomerDetailsModal() {
+    const modal = document.getElementById("customerDetailsModal");
+    currentViewingCustomerId = null;
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+
+async function openCustomerModal(customerId = null) {
+    const modal = document.getElementById("customerModal");
+    const form = document.getElementById("customerForm");
+    const titleEl = document.getElementById("customerModalTitle");
+    const subtitleEl = document.getElementById("customerModalSubtitle");
+    const idInput = document.getElementById("customerFormId");
+    const nameInput = document.getElementById("customerNameInput");
+    const emailInput = document.getElementById("customerEmailInput");
+    const phoneInput = document.getElementById("customerPhoneInput");
+    const addressInput = document.getElementById("customerAddressInput");
+    const messageEl = document.getElementById("customerFormMessage");
+
+    if (!modal) return;
+
+    if (form) form.reset();
+    if (messageEl) {
+        messageEl.textContent = "";
+        messageEl.className = "form-message";
+    }
+
+    if (customerId) {
+        if (titleEl) titleEl.textContent = "Edit Customer Profile";
+        if (subtitleEl) subtitleEl.textContent = "Update contact and address information.";
+        if (idInput) idInput.value = customerId;
+
+        try {
+            const response = await fetch(`/api/customers/${customerId}`);
+            if (!response.ok) throw new Error("Failed to load customer profile for editing");
+            const c = await response.json();
+
+            if (nameInput) nameInput.value = c.name || "";
+            if (emailInput) emailInput.value = c.email || "";
+            if (phoneInput) phoneInput.value = c.phone || "";
+            if (addressInput) addressInput.value = c.address || "";
+        } catch (error) {
+            console.error("Error loading customer for edit:", error);
+            if (messageEl) {
+                messageEl.textContent = "Failed to load customer data. Please try again.";
+                messageEl.className = "form-message error";
+            }
+        }
+    } else {
+        if (titleEl) titleEl.textContent = "New Customer";
+        if (subtitleEl) subtitleEl.textContent = "Register a new customer profile.";
+        if (idInput) idInput.value = "";
+    }
+
+    modal.classList.add("show");
+    modal.setAttribute("aria-hidden", "false");
+}
+
+
+function closeCustomerModal() {
+    const modal = document.getElementById("customerModal");
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+
+async function handleCustomerFormSubmit(event) {
+    event.preventDefault();
+
+    const idInput = document.getElementById("customerFormId");
+    const nameInput = document.getElementById("customerNameInput");
+    const emailInput = document.getElementById("customerEmailInput");
+    const phoneInput = document.getElementById("customerPhoneInput");
+    const addressInput = document.getElementById("customerAddressInput");
+    const messageEl = document.getElementById("customerFormMessage");
+    const submitBtn = document.getElementById("submitCustomerButton");
+
+    const customerId = idInput ? idInput.value.trim() : "";
+    const name = nameInput ? nameInput.value.trim() : "";
+    const email = emailInput ? emailInput.value.trim() : "";
+    const phone = phoneInput ? phoneInput.value.trim() : "";
+    const address = addressInput ? addressInput.value.trim() : "";
+
+    // Frontend validation
+    if (!name || !email || !phone || !address) {
+        if (messageEl) {
+            messageEl.textContent = "All fields are required.";
+            messageEl.className = "form-message error";
+        }
+        return;
+    }
+
+    const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+    if (!emailPattern.test(email)) {
+        if (messageEl) {
+            messageEl.textContent = "Please enter a valid email address.";
+            messageEl.className = "form-message error";
+        }
+        return;
+    }
+
+    if (!/^\d{10}$/.test(phone)) {
+        if (messageEl) {
+            messageEl.textContent = "Phone number must contain exactly 10 digits.";
+            messageEl.className = "form-message error";
+        }
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Saving...</span>`;
+    }
+
+    try {
+        const isEdit = Boolean(customerId);
+        const url = isEdit ? `/api/customers/${customerId}` : "/api/customers";
+        const method = isEdit ? "PUT" : "POST";
+
+        const response = await fetch(url, {
+            method: method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, email, phone, address })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.error || "Failed to save customer");
+        }
+
+        closeCustomerModal();
+        showToast(
+            isEdit ? "Customer Updated" : "Customer Created",
+            `Profile for '${result.name}' saved successfully.`
+        );
+
+        // Refresh views
+        loadCustomerStats();
+        loadCustomersTable();
+        loadDashboard();
+        loadCustomers();
+
+    } catch (error) {
+        console.error("Error saving customer:", error);
+        if (messageEl) {
+            messageEl.textContent = error.message || "An unexpected error occurred.";
+            messageEl.className = "form-message error";
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-check"></i><span>Save Customer</span>`;
+        }
+    }
+}
+
+
+async function deleteCustomer(customerId, customerName) {
+    const confirmed = confirm(`Are you sure you want to delete customer '${customerName}' (#CUST-${customerId})?\n\nIf this customer is linked to existing parcels, deletion will be safely blocked.`);
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch(`/api/customers/${customerId}`, {
+            method: "DELETE"
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            alert(result.error || "Could not delete customer.");
+            showToast("Deletion Blocked", result.error || "Referential integrity preserved.");
+            return;
+        }
+
+        showToast("Customer Deleted", result.message || "Customer profile removed.");
+        loadCustomerStats();
+        loadCustomersTable();
+        loadDashboard();
+        loadCustomers();
+
+    } catch (error) {
+        console.error("Error deleting customer:", error);
+        showToast("Error", error.message || "Failed to communicate with server.");
     }
 }

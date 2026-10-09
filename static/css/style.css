@@ -2966,3 +2966,162 @@ canvas {
         align-items: stretch;
     }
 }
+
+
+/* =========================================================
+   CUSTOMERS MANAGEMENT STYLES
+========================================================= */
+
+.customers-header-panel {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.customers-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.customer-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.customer-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 22px;
+}
+
+.customer-stat-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #7b8ea8;
+    margin-bottom: 4px;
+}
+
+.customer-stat-value {
+    font-size: 28px;
+    font-weight: 850;
+    color: #f8fafc;
+    letter-spacing: -0.5px;
+    margin: 0;
+}
+
+/* Customers Toolbar */
+.customers-toolbar-panel {
+    padding: 18px 24px;
+    margin-bottom: 24px;
+}
+
+.customers-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+/* Customer Modals */
+.customer-details-card {
+    max-width: 860px;
+    width: 95%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.customer-modal-card {
+    max-width: 620px;
+    width: 95%;
+}
+
+.customer-modal-body {
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.customer-info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+
+.customer-info-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 14px 16px;
+}
+
+.customer-info-card.full-span {
+    grid-column: span 3;
+}
+
+.recent-customer-section {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+    padding: 18px 20px;
+}
+
+.recent-customer-section h4 {
+    margin: 0 0 16px 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+@media (max-width: 1100px) {
+    .customer-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .customer-info-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .customer-info-card.full-span {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 768px) {
+    .customer-stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .customer-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .customer-info-card.full-span {
+        grid-column: span 1;
+    }
+
+    .customers-header-panel {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .customers-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}

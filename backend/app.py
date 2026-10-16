@@ -1,15 +1,23 @@
-from flask import Flask, jsonify, render_template, request
-from db import get_db_connection
-
+import os
+import sys
 import secrets
 import string
 import re
+from datetime import datetime
+from decimal import Decimal
+from flask import Flask, jsonify, render_template, request
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from db import get_db_connection
+from qr_code import generate_qr_svg
+
+
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 app = Flask(
     __name__,
-    template_folder="../templates",
-    static_folder="../static"
+    template_folder=os.path.join(BASE_DIR, "templates"),
+    static_folder=os.path.join(BASE_DIR, "static")
 )
 
 
@@ -2393,27 +2401,935 @@ def get_vehicle(vehicle_id):
 
 @app.route("/api/employees", methods=["GET"])
 def get_employees():
-
     branch_id = request.args.get("branch_id")
+    search_query = request.args.get("search", "").strip()
+    status_filter = request.args.get("status", "").strip()
+
     db = get_db_connection()
     try:
         cursor = db.cursor(dictionary=True)
+        conditions = []
+        params = []
+
         if branch_id:
-            cursor.execute("""
-                SELECT e.employee_id, e.name, e.phone, e.email, e.role, e.branch_id, b.branch_name, b.city
-                FROM Employee e
-                JOIN Branch b ON e.branch_id = b.branch_id
-                WHERE e.branch_id = %s
-                ORDER BY e.name ASC
-            """, (branch_id,))
-        else:
-            cursor.execute("""
-                SELECT e.employee_id, e.name, e.phone, e.email, e.role, e.branch_id, b.branch_name, b.city
-                FROM Employee e
-                JOIN Branch b ON e.branch_id = b.branch_id
-                ORDER BY e.employee_id ASC
-            """)
+            conditions.append("e.branch_id = %s")
+            params.append(branch_id)
+
+        if status_filter:
+            conditions.append("e.status = %s")
+            params.append(status_filter)
+
+        if search_query:
+            conditions.append("""(
+                e.name LIKE %s
+                OR e.email LIKE %s
+                OR e.phone LIKE %s
+                OR e.role LIKE %s
+                OR b.branch_name LIKE %s
+                OR b.city LIKE %s
+                OR CAST(e.employee_id AS CHAR) = %s
+            )""")
+            search_param = f"%{search_query}%"
+            params.extend([search_param, search_param, search_param, search_param, search_param, search_param, search_query])
+
+        where_clause = ""
+        if conditions:
+            where_clause = f"WHERE {' AND '.join(conditions)}"
+
+        query = f"""
+            SELECT
+                e.employee_id,
+                e.name,
+                e.phone,
+                e.email,
+                e.role,
+                e.branch_id,
+                e.status,
+                b.branch_name,
+                b.city,
+                (SELECT COUNT(*) FROM Shipment s WHERE s.employee_id = e.employee_id) AS total_shipments,
+                (
+                    SELECT COUNT(*)
+                    FROM Shipment s
+                    JOIN Parcel p ON s.parcel_id = p.parcel_id
+                    WHERE s.employee_id = e.employee_id
+                      AND p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+                ) AS active_shipments
+            FROM Employee e
+            JOIN Branch b ON e.branch_id = b.branch_id
+            {where_clause}
+            ORDER BY e.employee_id ASC
+        """
+        cursor.execute(query, tuple(params))
         return jsonify(cursor.fetchall())
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/employees/stats", methods=["GET"])
+def get_employee_stats():
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT COUNT(*) AS total_employees FROM Employee")
+        total_employees = cursor.fetchone()["total_employees"] or 0
+
+        cursor.execute("SELECT COUNT(*) AS active_employees FROM Employee WHERE status = 'Active'")
+        active_employees = cursor.fetchone()["active_employees"] or 0
+
+        cursor.execute("SELECT COUNT(*) AS inactive_employees FROM Employee WHERE status = 'Inactive'")
+        inactive_employees = cursor.fetchone()["inactive_employees"] or 0
+
+        return jsonify({
+            "total_employees": total_employees,
+            "active_employees": active_employees,
+            "inactive_employees": inactive_employees
+        })
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/employees/<int:employee_id>", methods=["GET"])
+def get_employee(employee_id):
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                e.employee_id,
+                e.name,
+                e.phone,
+                e.email,
+                e.role,
+                e.branch_id,
+                e.status,
+                b.branch_name,
+                b.city,
+                b.state,
+                b.address AS branch_address
+            FROM Employee e
+            JOIN Branch b ON e.branch_id = b.branch_id
+            WHERE e.employee_id = %s
+        """, (employee_id,))
+        employee = cursor.fetchone()
+
+        if not employee:
+            return jsonify({"error": "Employee not found"}), 404
+
+        # Recent shipments handled by this employee
+        cursor.execute("""
+            SELECT
+                s.shipment_id,
+                p.parcel_id,
+                p.tracking_number,
+                p.status AS parcel_status,
+                p.parcel_type,
+                p.weight,
+                DATE_FORMAT(s.shipment_date, '%Y-%m-%d %H:%i') AS shipment_date,
+                COALESCE(v.vehicle_number, 'N/A') AS vehicle_number,
+                COALESCE(v.vehicle_type, 'Standard') AS vehicle_type,
+                ob.city AS origin_city,
+                db.city AS destination_city
+            FROM Shipment s
+            JOIN Parcel p ON s.parcel_id = p.parcel_id
+            LEFT JOIN Vehicle v ON s.vehicle_id = v.vehicle_id
+            JOIN Branch ob ON p.origin_branch_id = ob.branch_id
+            JOIN Branch db ON p.destination_branch_id = db.branch_id
+            WHERE s.employee_id = %s
+            ORDER BY s.shipment_date DESC
+            LIMIT 15
+        """, (employee_id,))
+        employee["shipments"] = cursor.fetchall()
+        employee["total_shipments"] = len(employee["shipments"])
+        employee["active_shipments"] = sum(1 for s in employee["shipments"] if s["parcel_status"] in ['Pending', 'In Transit', 'Out for Delivery'])
+
+        return jsonify(employee)
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/employees", methods=["POST"])
+def create_employee():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    name = data.get("name", "").strip()
+    phone = data.get("phone", "").strip()
+    email = data.get("email", "").strip()
+    role = data.get("role", "").strip()
+    branch_id = data.get("branch_id")
+    status = data.get("status", "Active").strip()
+
+    if not name:
+        return jsonify({"error": "Employee name is required"}), 400
+    if not phone or not phone.isdigit() or len(phone) != 10:
+        return jsonify({"error": "Phone number must be exactly 10 digits"}), 400
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return jsonify({"error": "Please enter a valid email address"}), 400
+    if not role:
+        return jsonify({"error": "Designation/Role is required"}), 400
+    if not branch_id:
+        return jsonify({"error": "Assigned Branch is required"}), 400
+
+    if status not in ["Active", "Inactive"]:
+        status = "Active"
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        # Check if email is unique
+        cursor.execute("SELECT employee_id FROM Employee WHERE email = %s", (email,))
+        if cursor.fetchone():
+            return jsonify({"error": "An employee with this email already exists"}), 409
+
+        # Check if branch exists
+        cursor.execute("SELECT branch_id FROM Branch WHERE branch_id = %s", (branch_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Selected branch does not exist"}), 404
+
+        cursor.execute("""
+            INSERT INTO Employee (name, phone, email, role, branch_id, status)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (name, phone, email, role, branch_id, status))
+        db.commit()
+
+        new_id = cursor.lastrowid
+        return jsonify({
+            "message": "Employee created successfully",
+            "employee_id": new_id
+        }), 201
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/employees/<int:employee_id>", methods=["PUT"])
+def update_employee(employee_id):
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    name = data.get("name", "").strip()
+    phone = data.get("phone", "").strip()
+    email = data.get("email", "").strip()
+    role = data.get("role", "").strip()
+    branch_id = data.get("branch_id")
+    status = data.get("status", "Active").strip()
+
+    if not name:
+        return jsonify({"error": "Employee name is required"}), 400
+    if not phone or not phone.isdigit() or len(phone) != 10:
+        return jsonify({"error": "Phone number must be exactly 10 digits"}), 400
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return jsonify({"error": "Please enter a valid email address"}), 400
+    if not role:
+        return jsonify({"error": "Designation/Role is required"}), 400
+    if not branch_id:
+        return jsonify({"error": "Assigned Branch is required"}), 400
+
+    if status not in ["Active", "Inactive"]:
+        status = "Active"
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        # Check employee exists
+        cursor.execute("SELECT employee_id FROM Employee WHERE employee_id = %s", (employee_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Employee not found"}), 404
+
+        # Check email uniqueness across other employees
+        cursor.execute("SELECT employee_id FROM Employee WHERE email = %s AND employee_id != %s", (email, employee_id))
+        if cursor.fetchone():
+            return jsonify({"error": "Another employee with this email already exists"}), 409
+
+        # Check branch exists
+        cursor.execute("SELECT branch_id FROM Branch WHERE branch_id = %s", (branch_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Selected branch does not exist"}), 404
+
+        # If deactivating, verify no active shipments
+        if status == "Inactive":
+            cursor.execute("""
+                SELECT COUNT(*) AS active_count
+                FROM Shipment s
+                JOIN Parcel p ON s.parcel_id = p.parcel_id
+                WHERE s.employee_id = %s
+                  AND p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+            """, (employee_id,))
+            active_cnt = cursor.fetchone()["active_count"]
+            if active_cnt > 0:
+                return jsonify({"error": f"Cannot set employee to Inactive: Currently assigned to {active_cnt} active shipment(s) in progress"}), 400
+
+        cursor.execute("""
+            UPDATE Employee
+            SET name = %s, phone = %s, email = %s, role = %s, branch_id = %s, status = %s
+            WHERE employee_id = %s
+        """, (name, phone, email, role, branch_id, status, employee_id))
+        db.commit()
+
+        return jsonify({"message": "Employee updated successfully"})
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/employees/<int:employee_id>/status", methods=["PATCH"])
+def toggle_employee_status(employee_id):
+    data = request.get_json() or {}
+    new_status = data.get("status")
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT employee_id, status FROM Employee WHERE employee_id = %s", (employee_id,))
+        emp = cursor.fetchone()
+        if not emp:
+            return jsonify({"error": "Employee not found"}), 404
+
+        if not new_status:
+            new_status = "Inactive" if emp["status"] == "Active" else "Active"
+
+        if new_status not in ["Active", "Inactive"]:
+            return jsonify({"error": "Status must be 'Active' or 'Inactive'"}), 400
+
+        # Safe deactivation check
+        if new_status == "Inactive":
+            cursor.execute("""
+                SELECT COUNT(*) AS active_count
+                FROM Shipment s
+                JOIN Parcel p ON s.parcel_id = p.parcel_id
+                WHERE s.employee_id = %s
+                  AND p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+            """, (employee_id,))
+            active_cnt = cursor.fetchone()["active_count"]
+            if active_cnt > 0:
+                return jsonify({"error": f"Safe Deactivation Blocked: Employee is actively assigned to {active_cnt} parcel(s) in delivery/transit. Reassign before deactivating."}), 400
+
+        cursor.execute("UPDATE Employee SET status = %s WHERE employee_id = %s", (new_status, employee_id))
+        db.commit()
+
+        return jsonify({
+            "message": f"Employee status updated to {new_status}",
+            "status": new_status
+        })
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/employees/<int:employee_id>", methods=["DELETE"])
+def delete_employee(employee_id):
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT employee_id FROM Employee WHERE employee_id = %s", (employee_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Employee not found"}), 404
+
+        # Check references in Shipment, Tracking_Update, or Delivery to preserve historical records
+        cursor.execute("SELECT COUNT(*) AS cnt FROM Shipment WHERE employee_id = %s", (employee_id,))
+        shipment_refs = cursor.fetchone()["cnt"]
+        cursor.execute("SELECT COUNT(*) AS cnt FROM Tracking_Update WHERE employee_id = %s", (employee_id,))
+        tracking_refs = cursor.fetchone()["cnt"]
+
+        if shipment_refs > 0 or tracking_refs > 0:
+            return jsonify({
+                "error": f"Cannot delete employee with historical records ({shipment_refs} shipments, {tracking_refs} tracking updates). Please use safe deactivation instead."
+            }), 409
+
+        cursor.execute("DELETE FROM Employee WHERE employee_id = %s", (employee_id,))
+        db.commit()
+
+        return jsonify({"message": "Employee deleted successfully"})
+    finally:
+        cursor.close()
+        db.close()
+
+
+# =========================================================
+# PAYMENTS API
+# =========================================================
+
+@app.route("/api/payments", methods=["GET"])
+def get_payments():
+    search_query = request.args.get("search", "").strip()
+    status_filter = request.args.get("status", "").strip()
+    method_filter = (request.args.get("payment_method") or request.args.get("method") or "").strip()
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        conditions = []
+        params = []
+
+        if status_filter:
+            conditions.append("py.payment_status = %s")
+            params.append(status_filter)
+
+        if method_filter:
+            conditions.append("py.payment_method = %s")
+            params.append(method_filter)
+
+        if search_query:
+            conditions.append("""(
+                CAST(py.payment_id AS CHAR) = %s
+                OR p.tracking_number LIKE %s
+                OR c.name LIKE %s
+                OR c.email LIKE %s
+                OR c.phone LIKE %s
+                OR py.payment_method LIKE %s
+            )""")
+            search_param = f"%{search_query}%"
+            params.extend([search_query, search_param, search_param, search_param, search_param, search_param])
+
+        where_clause = ""
+        if conditions:
+            where_clause = f"WHERE {' AND '.join(conditions)}"
+
+        query = f"""
+            SELECT
+                py.payment_id,
+                py.parcel_id,
+                py.customer_id,
+                py.amount,
+                py.payment_method,
+                py.payment_status,
+                DATE_FORMAT(py.payment_date, '%Y-%m-%d %H:%i') AS payment_date,
+                p.tracking_number,
+                p.status AS parcel_status,
+                p.parcel_type,
+                p.shipping_cost,
+                c.name AS customer_name,
+                c.email AS customer_email,
+                c.phone AS customer_phone,
+                ob.city AS origin_city,
+                db.city AS destination_city
+            FROM Payment py
+            JOIN Parcel p ON py.parcel_id = p.parcel_id
+            JOIN Customer c ON py.customer_id = c.customer_id
+            JOIN Branch ob ON p.origin_branch_id = ob.branch_id
+            JOIN Branch db ON p.destination_branch_id = db.branch_id
+            {where_clause}
+            ORDER BY py.payment_id DESC
+        """
+        cursor.execute(query, tuple(params))
+        payments = cursor.fetchall()
+
+        # Format amount as float for JSON
+        for py in payments:
+            py["amount"] = float(py["amount"])
+            py["shipping_cost"] = float(py["shipping_cost"])
+
+        return jsonify(payments)
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/payments/stats", methods=["GET"])
+def get_payment_stats():
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT COUNT(*) AS total_payments FROM Payment")
+        total_payments = cursor.fetchone()["total_payments"] or 0
+
+        cursor.execute("SELECT COUNT(*) AS successful_payments FROM Payment WHERE payment_status = 'Paid'")
+        successful_payments = cursor.fetchone()["successful_payments"] or 0
+
+        cursor.execute("SELECT COUNT(*) AS pending_payments FROM Payment WHERE payment_status = 'Unpaid'")
+        pending_payments = cursor.fetchone()["pending_payments"] or 0
+
+        cursor.execute("SELECT COUNT(*) AS refunded_payments FROM Payment WHERE payment_status = 'Refunded'")
+        refunded_payments = cursor.fetchone()["refunded_payments"] or 0
+
+        # Only 'Paid' counts towards collected revenue. Pending/Refunded do not.
+        cursor.execute("SELECT COALESCE(SUM(amount), 0) AS total_collected FROM Payment WHERE payment_status = 'Paid'")
+        total_collected = float(cursor.fetchone()["total_collected"] or 0)
+
+        return jsonify({
+            "total_payments": total_payments,
+            "successful_payments": successful_payments,
+            "pending_payments": pending_payments,
+            "refunded_payments": refunded_payments,
+            "total_collected": total_collected
+        })
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/payments/unpaid-parcels", methods=["GET"])
+def get_unpaid_parcels():
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                p.parcel_id,
+                p.tracking_number,
+                p.sender_id AS customer_id,
+                c.name AS customer_name,
+                c.email AS customer_email,
+                p.shipping_cost,
+                p.status AS parcel_status,
+                p.parcel_type
+            FROM Parcel p
+            JOIN Customer c ON p.sender_id = c.customer_id
+            LEFT JOIN Payment py ON p.parcel_id = py.parcel_id
+            WHERE py.payment_id IS NULL
+            ORDER BY p.parcel_id DESC
+        """)
+        parcels = cursor.fetchall()
+        for p in parcels:
+            p["shipping_cost"] = float(p["shipping_cost"])
+        return jsonify(parcels)
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/payments/<int:payment_id>", methods=["GET"])
+def get_payment(payment_id):
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                py.payment_id,
+                py.parcel_id,
+                py.customer_id,
+                py.amount,
+                py.payment_method,
+                py.payment_status,
+                DATE_FORMAT(py.payment_date, '%Y-%m-%d %H:%i') AS payment_date,
+                p.tracking_number,
+                p.status AS parcel_status,
+                p.parcel_type,
+                p.weight,
+                p.shipping_cost,
+                DATE_FORMAT(p.booking_date, '%Y-%m-%d %H:%i') AS booking_date,
+                c.name AS customer_name,
+                c.email AS customer_email,
+                c.phone AS customer_phone,
+                c.address AS customer_address,
+                ob.branch_name AS origin_branch,
+                ob.city AS origin_city,
+                db_branch.branch_name AS destination_branch,
+                db_branch.city AS destination_city
+            FROM Payment py
+            JOIN Parcel p ON py.parcel_id = p.parcel_id
+            JOIN Customer c ON py.customer_id = c.customer_id
+            JOIN Branch ob ON p.origin_branch_id = ob.branch_id
+            JOIN Branch db_branch ON p.destination_branch_id = db_branch.branch_id
+            WHERE py.payment_id = %s
+        """, (payment_id,))
+        payment = cursor.fetchone()
+
+        if not payment:
+            return jsonify({"error": "Payment record not found"}), 404
+
+        payment["amount"] = float(payment["amount"])
+        payment["shipping_cost"] = float(payment["shipping_cost"])
+        payment["weight"] = float(payment["weight"])
+
+        return jsonify(payment)
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/payments", methods=["POST"])
+def create_payment():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    parcel_id = data.get("parcel_id")
+    customer_id = data.get("customer_id")
+    amount = data.get("amount")
+    payment_method = data.get("payment_method", "").strip()
+    payment_status = data.get("payment_status", "Paid").strip()
+
+    if not parcel_id:
+        return jsonify({"error": "Parcel ID is required"}), 400
+    if not payment_method:
+        return jsonify({"error": "Payment method is required"}), 400
+    if payment_status not in ["Unpaid", "Paid", "Refunded"]:
+        payment_status = "Paid"
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        # 1. Verify parcel exists
+        cursor.execute("SELECT parcel_id, sender_id, shipping_cost FROM Parcel WHERE parcel_id = %s", (parcel_id,))
+        parcel = cursor.fetchone()
+        if not parcel:
+            return jsonify({"error": "Parcel not found"}), 404
+
+        # 2. Check if payment already exists for this parcel (enforces UNIQUE constraint)
+        cursor.execute("SELECT payment_id FROM Payment WHERE parcel_id = %s", (parcel_id,))
+        if cursor.fetchone():
+            return jsonify({"error": "A payment record already exists for this parcel"}), 409
+
+        # Auto-derive customer_id from parcel sender if not provided
+        if not customer_id:
+            customer_id = parcel["sender_id"]
+
+        # Validate customer exists
+        cursor.execute("SELECT customer_id FROM Customer WHERE customer_id = %s", (customer_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Customer not found"}), 404
+
+        # Amount validation
+        if amount is None or amount == "":
+            amount = parcel["shipping_cost"]
+        try:
+            amount = float(amount)
+            if amount <= 0:
+                return jsonify({"error": "Amount must be greater than zero"}), 400
+        except ValueError:
+            return jsonify({"error": "Invalid amount format"}), 400
+
+        payment_date = datetime.now() if payment_status == "Paid" else None
+
+        cursor.execute("""
+            INSERT INTO Payment (parcel_id, customer_id, amount, payment_method, payment_status, payment_date)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (parcel_id, customer_id, amount, payment_method, payment_status, payment_date))
+        db.commit()
+
+        new_id = cursor.lastrowid
+        return jsonify({
+            "message": "Payment record created successfully",
+            "payment_id": new_id
+        }), 201
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/payments/<int:payment_id>/status", methods=["PATCH"])
+def update_payment_status(payment_id):
+    data = request.get_json() or {}
+    new_status = data.get("status")
+
+    if new_status not in ["Unpaid", "Paid", "Refunded"]:
+        return jsonify({"error": "Invalid payment status. Must be 'Unpaid', 'Paid', or 'Refunded'"}), 400
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT payment_id, payment_date FROM Payment WHERE payment_id = %s", (payment_id,))
+        py = cursor.fetchone()
+        if not py:
+            return jsonify({"error": "Payment record not found"}), 404
+
+        if new_status == "Paid":
+            payment_date = py["payment_date"] or datetime.now()
+        else:
+            payment_date = py["payment_date"]
+
+        cursor.execute("""
+            UPDATE Payment
+            SET payment_status = %s, payment_date = %s
+            WHERE payment_id = %s
+        """, (new_status, payment_date, payment_id))
+        db.commit()
+
+        return jsonify({
+            "message": f"Payment status updated to {new_status}",
+            "payment_status": new_status
+        })
+    finally:
+        cursor.close()
+        db.close()
+
+
+# =========================================================
+# GENERATE QR CODE FOR PAYMENTS
+# =========================================================
+
+@app.route("/api/payments/<int:payment_id>/qr", methods=["GET"])
+def get_payment_qr(payment_id):
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                py.payment_id,
+                py.parcel_id,
+                py.customer_id,
+                py.amount,
+                py.payment_method,
+                py.payment_status,
+                p.tracking_number,
+                c.name AS customer_name
+            FROM Payment py
+            JOIN Parcel p ON py.parcel_id = p.parcel_id
+            JOIN Customer c ON py.customer_id = c.customer_id
+            WHERE py.payment_id = %s
+        """, (payment_id,))
+        payment = cursor.fetchone()
+
+        if not payment:
+            return jsonify({"error": "Payment record not found for QR generation"}), 404
+
+        amount_val = float(payment["amount"])
+        tracking = payment["tracking_number"]
+        ref_code = f"CX-PAY-{payment_id:05d}"
+
+        # Standard UPI reference format with clearly defined demo parameters
+        upi_payload = (
+            f"upi://pay?pa=courierx.demo@bank"
+            f"&pn=CourierX"
+            f"&tr={ref_code}"
+            f"&am={amount_val:.2f}"
+            f"&cu=INR"
+            f"&tn=CX-Ref-{tracking}"
+        )
+
+        # Generate standard SVG in pure Python
+        svg_content, version, mask = generate_qr_svg(upi_payload, quiet_zone=4, scale=7)
+
+        return jsonify({
+            "payment_id": payment_id,
+            "reference": ref_code,
+            "tracking_number": tracking,
+            "customer_name": payment["customer_name"],
+            "amount": amount_val,
+            "payment_status": payment["payment_status"],
+            "payment_method": payment["payment_method"],
+            "payload": upi_payload,
+            "qr_svg": svg_content,
+            "is_demo": True,
+            "badge": "Demo QR — No Money Transferred",
+            "disclaimer": "This demonstration QR code encodes a verified CourierX payment reference. It does not initiate a real banking transaction or modify database records."
+        })
+    finally:
+        cursor.close()
+        db.close()
+
+
+# =========================================================
+# FEEDBACK API
+# =========================================================
+
+@app.route("/api/feedback", methods=["GET"])
+def get_feedback():
+    search_query = request.args.get("search", "").strip()
+    rating_filter = request.args.get("rating", "").strip()
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        conditions = []
+        params = []
+
+        if rating_filter and rating_filter.isdigit():
+            conditions.append("fb.rating = %s")
+            params.append(int(rating_filter))
+
+        if search_query:
+            conditions.append("""(
+                CAST(fb.feedback_id AS CHAR) = %s
+                OR p.tracking_number LIKE %s
+                OR c.name LIKE %s
+                OR c.email LIKE %s
+                OR fb.comments LIKE %s
+            )""")
+            search_param = f"%{search_query}%"
+            params.extend([search_query, search_param, search_param, search_param, search_param])
+
+        where_clause = ""
+        if conditions:
+            where_clause = f"WHERE {' AND '.join(conditions)}"
+
+        query = f"""
+            SELECT
+                fb.feedback_id,
+                fb.parcel_id,
+                fb.customer_id,
+                fb.rating,
+                fb.comments,
+                DATE_FORMAT(fb.feedback_date, '%Y-%m-%d %H:%i') AS feedback_date,
+                p.tracking_number,
+                p.status AS parcel_status,
+                c.name AS customer_name,
+                c.email AS customer_email,
+                c.phone AS customer_phone
+            FROM Feedback fb
+            JOIN Parcel p ON fb.parcel_id = p.parcel_id
+            JOIN Customer c ON fb.customer_id = c.customer_id
+            {where_clause}
+            ORDER BY fb.feedback_id DESC
+        """
+        cursor.execute(query, tuple(params))
+        return jsonify(cursor.fetchall())
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/feedback/stats", methods=["GET"])
+def get_feedback_stats():
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT COUNT(*) AS total_feedback, ROUND(COALESCE(AVG(rating), 0), 1) AS average_rating FROM Feedback")
+        res = cursor.fetchone()
+        total_feedback = res["total_feedback"] or 0
+        avg_rating = float(res["average_rating"] or 0)
+
+        # Rating distribution
+        cursor.execute("""
+            SELECT rating, COUNT(*) AS cnt
+            FROM Feedback
+            GROUP BY rating
+        """)
+        counts = {str(i): 0 for i in range(1, 6)}
+        for r in cursor.fetchall():
+            counts[str(r["rating"])] = r["cnt"]
+
+        return jsonify({
+            "total_feedback": total_feedback,
+            "average_rating": avg_rating,
+            "distribution": counts
+        })
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/feedback/eligible-parcels", methods=["GET"])
+def get_eligible_feedback_parcels():
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                p.parcel_id,
+                p.tracking_number,
+                p.sender_id AS customer_id,
+                c.name AS customer_name,
+                p.status AS parcel_status,
+                p.parcel_type
+            FROM Parcel p
+            JOIN Customer c ON p.sender_id = c.customer_id
+            LEFT JOIN Feedback fb ON p.parcel_id = fb.parcel_id
+            WHERE fb.feedback_id IS NULL
+            ORDER BY p.parcel_id DESC
+        """)
+        return jsonify(cursor.fetchall())
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/feedback/<int:feedback_id>", methods=["GET"])
+def get_feedback_detail(feedback_id):
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                fb.feedback_id,
+                fb.parcel_id,
+                fb.customer_id,
+                fb.rating,
+                fb.comments,
+                DATE_FORMAT(fb.feedback_date, '%Y-%m-%d %H:%i') AS feedback_date,
+                p.tracking_number,
+                p.status AS parcel_status,
+                p.parcel_type,
+                c.name AS customer_name,
+                c.email AS customer_email,
+                c.phone AS customer_phone
+            FROM Feedback fb
+            JOIN Parcel p ON fb.parcel_id = p.parcel_id
+            JOIN Customer c ON fb.customer_id = c.customer_id
+            WHERE fb.feedback_id = %s
+        """, (feedback_id,))
+        fb = cursor.fetchone()
+        if not fb:
+            return jsonify({"error": "Feedback record not found"}), 404
+        return jsonify(fb)
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/feedback", methods=["POST"])
+def create_feedback():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    parcel_id = data.get("parcel_id")
+    customer_id = data.get("customer_id")
+    rating = data.get("rating")
+    comments = data.get("comments", "").strip()
+
+    if not parcel_id:
+        return jsonify({"error": "Parcel ID is required"}), 400
+
+    if rating is None or str(rating).strip() == "":
+        return jsonify({"error": "Rating is required"}), 400
+
+    try:
+        rating = int(rating)
+        if rating < 1 or rating > 5:
+            return jsonify({"error": "Rating must be between 1 and 5"}), 400
+    except ValueError:
+        return jsonify({"error": "Rating must be an integer between 1 and 5"}), 400
+
+    if len(comments) > 500:
+        return jsonify({"error": "Comments must not exceed 500 characters"}), 400
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        # Verify parcel exists
+        cursor.execute("SELECT parcel_id, sender_id FROM Parcel WHERE parcel_id = %s", (parcel_id,))
+        parcel = cursor.fetchone()
+        if not parcel:
+            return jsonify({"error": "Parcel not found"}), 404
+
+        # Enforce unique feedback per parcel
+        cursor.execute("SELECT feedback_id FROM Feedback WHERE parcel_id = %s", (parcel_id,))
+        if cursor.fetchone():
+            return jsonify({"error": "Feedback has already been submitted for this parcel"}), 409
+
+        if not customer_id:
+            customer_id = parcel["sender_id"]
+
+        # Verify customer exists
+        cursor.execute("SELECT customer_id FROM Customer WHERE customer_id = %s", (customer_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Customer not found"}), 404
+
+        cursor.execute("""
+            INSERT INTO Feedback (parcel_id, customer_id, rating, comments, feedback_date)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (parcel_id, customer_id, rating, comments, datetime.now()))
+        db.commit()
+
+        new_id = cursor.lastrowid
+        return jsonify({
+            "message": "Feedback submitted successfully",
+            "feedback_id": new_id
+        }), 201
     finally:
         cursor.close()
         db.close()

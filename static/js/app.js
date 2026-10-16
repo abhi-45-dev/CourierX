@@ -5,6 +5,10 @@ document.addEventListener("DOMContentLoaded", () => {
     setupShipmentsView();
     setupVehiclesView();
     setupCustomersView();
+    setupEmployeesView();
+    setupPaymentsView();
+    setupFeedbackView();
+    setupPaymentQrModal();
     setupAssignShipmentModal();
     loadDashboard();
     loadCustomers();
@@ -1636,12 +1640,17 @@ function setupNavigation() {
     const navDashboard = document.getElementById("navDashboard");
     const navParcels = document.getElementById("navParcels");
     const navShipments = document.getElementById("navShipments");
+    const navTracking = document.getElementById("navTracking");
     const navVehicles = document.getElementById("navVehicles");
     const navCustomers = document.getElementById("navCustomers");
     const navBranches = document.getElementById("navBranches");
+    const navEmployees = document.getElementById("navEmployees");
+    const navPayments = document.getElementById("navPayments");
+    const navFeedback = document.getElementById("navFeedback");
     const viewAllButton = document.getElementById("viewAllParcelsButton");
     const assignShipmentButton = document.getElementById("assignShipmentButton");
     const shipmentsAssignButton = document.getElementById("shipmentsAssignButton");
+    const paymentButton = document.getElementById("paymentButton");
 
     if (navDashboard) {
         navDashboard.addEventListener("click", event => {
@@ -1664,6 +1673,18 @@ function setupNavigation() {
         });
     }
 
+    if (navTracking) {
+        navTracking.addEventListener("click", event => {
+            event.preventDefault();
+            switchToView("dashboard");
+            const trackingInput = document.getElementById("trackingNumber");
+            if (trackingInput) {
+                trackingInput.scrollIntoView({ behavior: "smooth", block: "center" });
+                trackingInput.focus();
+            }
+        });
+    }
+
     if (navVehicles) {
         navVehicles.addEventListener("click", event => {
             event.preventDefault();
@@ -1682,6 +1703,34 @@ function setupNavigation() {
         navBranches.addEventListener("click", event => {
             event.preventDefault();
             switchToView("branches");
+        });
+    }
+
+    if (navEmployees) {
+        navEmployees.addEventListener("click", event => {
+            event.preventDefault();
+            switchToView("employees");
+        });
+    }
+
+    if (navPayments) {
+        navPayments.addEventListener("click", event => {
+            event.preventDefault();
+            switchToView("payments");
+        });
+    }
+
+    if (navFeedback) {
+        navFeedback.addEventListener("click", event => {
+            event.preventDefault();
+            switchToView("feedback");
+        });
+    }
+
+    if (paymentButton) {
+        paymentButton.addEventListener("click", event => {
+            event.preventDefault();
+            switchToView("payments");
         });
     }
 
@@ -1709,138 +1758,105 @@ function setupNavigation() {
 
 
 function switchToView(viewName) {
-    const dashboardView = document.getElementById("dashboardView");
-    const parcelsView = document.getElementById("parcelsView");
-    const shipmentsView = document.getElementById("shipmentsView");
-    const vehiclesView = document.getElementById("vehiclesView");
-    const customersView = document.getElementById("customersView");
-    const branchesView = document.getElementById("branchesView");
-    const navDashboard = document.getElementById("navDashboard");
-    const navParcels = document.getElementById("navParcels");
-    const navShipments = document.getElementById("navShipments");
-    const navVehicles = document.getElementById("navVehicles");
-    const navCustomers = document.getElementById("navCustomers");
-    const navBranches = document.getElementById("navBranches");
+    const views = {
+        dashboard: document.getElementById("dashboardView"),
+        parcels: document.getElementById("parcelsView"),
+        shipments: document.getElementById("shipmentsView"),
+        vehicles: document.getElementById("vehiclesView"),
+        customers: document.getElementById("customersView"),
+        branches: document.getElementById("branchesView"),
+        employees: document.getElementById("employeesView"),
+        payments: document.getElementById("paymentsView"),
+        feedback: document.getElementById("feedbackView")
+    };
+
+    const navs = {
+        dashboard: document.getElementById("navDashboard"),
+        parcels: document.getElementById("navParcels"),
+        shipments: document.getElementById("navShipments"),
+        tracking: document.getElementById("navTracking"),
+        vehicles: document.getElementById("navVehicles"),
+        customers: document.getElementById("navCustomers"),
+        branches: document.getElementById("navBranches"),
+        employees: document.getElementById("navEmployees"),
+        payments: document.getElementById("navPayments"),
+        feedback: document.getElementById("navFeedback")
+    };
+
     const topbarTitle = document.getElementById("topbarTitle");
     const topbarSubtitle = document.getElementById("topbarSubtitle");
 
+    // Hide all views
+    Object.values(views).forEach(v => {
+        if (v) v.style.display = "none";
+    });
+
+    // Remove active state from all nav items
+    Object.values(navs).forEach(n => {
+        if (n) n.classList.remove("active");
+    });
+
     if (viewName === "shipments") {
-        if (dashboardView) dashboardView.style.display = "none";
-        if (parcelsView) parcelsView.style.display = "none";
-        if (vehiclesView) vehiclesView.style.display = "none";
-        if (customersView) customersView.style.display = "none";
-        if (branchesView) branchesView.style.display = "none";
-        if (shipmentsView) shipmentsView.style.display = "block";
-
-        if (navDashboard) navDashboard.classList.remove("active");
-        if (navParcels) navParcels.classList.remove("active");
-        if (navVehicles) navVehicles.classList.remove("active");
-        if (navCustomers) navCustomers.classList.remove("active");
-        if (navBranches) navBranches.classList.remove("active");
-        if (navShipments) navShipments.classList.add("active");
-
+        if (views.shipments) views.shipments.style.display = "block";
+        if (navs.shipments) navs.shipments.classList.add("active");
         if (topbarTitle) topbarTitle.textContent = "Shipments";
         if (topbarSubtitle) topbarSubtitle.textContent = "Manage shipments, routes, delivery progress, and operational status.";
-
         loadShipmentStats();
         loadShipmentsTable();
     } else if (viewName === "vehicles") {
-        if (dashboardView) dashboardView.style.display = "none";
-        if (parcelsView) parcelsView.style.display = "none";
-        if (shipmentsView) shipmentsView.style.display = "none";
-        if (customersView) customersView.style.display = "none";
-        if (branchesView) branchesView.style.display = "none";
-        if (vehiclesView) vehiclesView.style.display = "block";
-
-        if (navDashboard) navDashboard.classList.remove("active");
-        if (navParcels) navParcels.classList.remove("active");
-        if (navShipments) navShipments.classList.remove("active");
-        if (navCustomers) navCustomers.classList.remove("active");
-        if (navBranches) navBranches.classList.remove("active");
-        if (navVehicles) navVehicles.classList.add("active");
-
+        if (views.vehicles) views.vehicles.style.display = "block";
+        if (navs.vehicles) navs.vehicles.classList.add("active");
         if (topbarTitle) topbarTitle.textContent = "Fleet Vehicles";
         if (topbarSubtitle) topbarSubtitle.textContent = "Monitor delivery vehicles, fleet capacity, and branch assignments.";
-
         loadVehicleStats();
         loadVehiclesTable();
     } else if (viewName === "customers") {
-        if (dashboardView) dashboardView.style.display = "none";
-        if (parcelsView) parcelsView.style.display = "none";
-        if (shipmentsView) shipmentsView.style.display = "none";
-        if (vehiclesView) vehiclesView.style.display = "none";
-        if (branchesView) branchesView.style.display = "none";
-        if (customersView) customersView.style.display = "block";
-
-        if (navDashboard) navDashboard.classList.remove("active");
-        if (navParcels) navParcels.classList.remove("active");
-        if (navShipments) navShipments.classList.remove("active");
-        if (navVehicles) navVehicles.classList.remove("active");
-        if (navBranches) navBranches.classList.remove("active");
-        if (navCustomers) navCustomers.classList.add("active");
-
+        if (views.customers) views.customers.style.display = "block";
+        if (navs.customers) navs.customers.classList.add("active");
         if (topbarTitle) topbarTitle.textContent = "Customers";
         if (topbarSubtitle) topbarSubtitle.textContent = "Manage customer profiles, contact information, and shipment activity.";
-
         loadCustomerStats();
         loadCustomersTable();
     } else if (viewName === "branches") {
-        if (dashboardView) dashboardView.style.display = "none";
-        if (parcelsView) parcelsView.style.display = "none";
-        if (shipmentsView) shipmentsView.style.display = "none";
-        if (vehiclesView) vehiclesView.style.display = "none";
-        if (customersView) customersView.style.display = "none";
-        if (branchesView) branchesView.style.display = "block";
-
-        if (navDashboard) navDashboard.classList.remove("active");
-        if (navParcels) navParcels.classList.remove("active");
-        if (navShipments) navShipments.classList.remove("active");
-        if (navVehicles) navVehicles.classList.remove("active");
-        if (navCustomers) navCustomers.classList.remove("active");
-        if (navBranches) navBranches.classList.add("active");
-
+        if (views.branches) views.branches.style.display = "block";
+        if (navs.branches) navs.branches.classList.add("active");
         if (topbarTitle) topbarTitle.textContent = "Branch Management";
         if (topbarSubtitle) topbarSubtitle.textContent = "Manage courier branches, locations, and operational status.";
-
         loadBranchStats();
         loadBranchesTable();
+    } else if (viewName === "employees") {
+        if (views.employees) views.employees.style.display = "block";
+        if (navs.employees) navs.employees.classList.add("active");
+        if (topbarTitle) topbarTitle.textContent = "Employees";
+        if (topbarSubtitle) topbarSubtitle.textContent = "Staff directory, designations, and branch assignment records.";
+        loadEmployeeStats();
+        loadEmployeesTable();
+        loadBranchesForEmployeeFilter();
+    } else if (viewName === "payments") {
+        if (views.payments) views.payments.style.display = "block";
+        if (navs.payments) navs.payments.classList.add("active");
+        if (topbarTitle) topbarTitle.textContent = "Payments";
+        if (topbarSubtitle) topbarSubtitle.textContent = "Parcel revenue collection, invoice history, and QR-based digital verification.";
+        loadPaymentStats();
+        loadPaymentsTable();
+    } else if (viewName === "feedback") {
+        if (views.feedback) views.feedback.style.display = "block";
+        if (navs.feedback) navs.feedback.classList.add("active");
+        if (topbarTitle) topbarTitle.textContent = "Customer Feedback";
+        if (topbarSubtitle) topbarSubtitle.textContent = "Service ratings, customer satisfaction reviews, and shipment delivery remarks.";
+        loadFeedbackStats();
+        loadFeedbackTable();
     } else if (viewName === "parcels") {
-        if (dashboardView) dashboardView.style.display = "none";
-        if (branchesView) branchesView.style.display = "none";
-        if (shipmentsView) shipmentsView.style.display = "none";
-        if (vehiclesView) vehiclesView.style.display = "none";
-        if (customersView) customersView.style.display = "none";
-        if (parcelsView) parcelsView.style.display = "block";
-
-        if (navDashboard) navDashboard.classList.remove("active");
-        if (navBranches) navBranches.classList.remove("active");
-        if (navShipments) navShipments.classList.remove("active");
-        if (navVehicles) navVehicles.classList.remove("active");
-        if (navCustomers) navCustomers.classList.remove("active");
-        if (navParcels) navParcels.classList.add("active");
-
+        if (views.parcels) views.parcels.style.display = "block";
+        if (navs.parcels) navs.parcels.classList.add("active");
         if (topbarTitle) topbarTitle.textContent = "Parcels";
         if (topbarSubtitle) topbarSubtitle.textContent = "Manage and track all shipments";
-
         loadParcels();
     } else {
-        if (parcelsView) parcelsView.style.display = "none";
-        if (branchesView) branchesView.style.display = "none";
-        if (shipmentsView) shipmentsView.style.display = "none";
-        if (vehiclesView) vehiclesView.style.display = "none";
-        if (customersView) customersView.style.display = "none";
-        if (dashboardView) dashboardView.style.display = "block";
-
-        if (navParcels) navParcels.classList.remove("active");
-        if (navBranches) navBranches.classList.remove("active");
-        if (navShipments) navShipments.classList.remove("active");
-        if (navVehicles) navVehicles.classList.remove("active");
-        if (navCustomers) navCustomers.classList.remove("active");
-        if (navDashboard) navDashboard.classList.add("active");
-
+        if (views.dashboard) views.dashboard.style.display = "block";
+        if (navs.dashboard) navs.dashboard.classList.add("active");
         if (topbarTitle) topbarTitle.textContent = "Dashboard";
         if (topbarSubtitle) topbarSubtitle.textContent = "Courier & Parcel Tracking Management";
-
         loadDashboard();
     }
 }
@@ -4408,5 +4424,1235 @@ async function deleteCustomer(customerId, customerName) {
     } catch (error) {
         console.error("Error deleting customer:", error);
         showToast("Error", error.message || "Failed to communicate with server.");
+    }
+}
+
+
+// =========================================================
+// EMPLOYEE MANAGEMENT
+// =========================================================
+
+let employeeSearchDebounceTimer = null;
+
+function setupEmployeesView() {
+    const searchInput = document.getElementById("employeesSearchInput");
+    const statusFilter = document.getElementById("employeeStatusFilter");
+    const branchFilter = document.getElementById("employeeBranchFilter");
+    const resetBtn = document.getElementById("resetEmployeeFilters");
+    const refreshBtn = document.getElementById("refreshEmployeesButton");
+    const newBtn = document.getElementById("newEmployeeButton");
+    const closeBtn = document.getElementById("closeEmployeeModal");
+    const cancelBtn = document.getElementById("cancelEmployeeModal");
+    const form = document.getElementById("employeeForm");
+    const closeDetailsBtn = document.getElementById("closeEmployeeDetailsModal");
+    const dismissDetailsBtn = document.getElementById("dismissEmployeeDetailsButton");
+
+    if (searchInput) {
+        searchInput.addEventListener("input", () => {
+            clearTimeout(employeeSearchDebounceTimer);
+            employeeSearchDebounceTimer = setTimeout(() => {
+                loadEmployeesTable();
+            }, 300);
+        });
+    }
+
+    if (statusFilter) {
+        statusFilter.addEventListener("change", () => loadEmployeesTable());
+    }
+
+    if (branchFilter) {
+        branchFilter.addEventListener("change", () => loadEmployeesTable());
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener("click", () => {
+            if (searchInput) searchInput.value = "";
+            if (statusFilter) statusFilter.value = "";
+            if (branchFilter) branchFilter.value = "";
+            loadEmployeesTable();
+        });
+    }
+
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", () => {
+            loadEmployeeStats();
+            loadEmployeesTable();
+            showToast("Employees Refreshed", "Staff directory reloaded from MySQL.");
+        });
+    }
+
+    if (newBtn) {
+        newBtn.addEventListener("click", () => openEmployeeModal());
+    }
+
+    if (closeBtn) closeBtn.addEventListener("click", closeEmployeeModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeEmployeeModal);
+    if (form) form.addEventListener("submit", handleEmployeeFormSubmit);
+    if (closeDetailsBtn) closeDetailsBtn.addEventListener("click", closeEmployeeDetailsModal);
+    if (dismissDetailsBtn) dismissDetailsBtn.addEventListener("click", closeEmployeeDetailsModal);
+}
+
+async function loadEmployeeStats() {
+    try {
+        const response = await fetch("/api/employees/stats");
+        if (!response.ok) throw new Error("Failed to load employee stats");
+        const data = await response.json();
+
+        const totalEl = document.getElementById("totalEmployeesCount");
+        const activeEl = document.getElementById("activeEmployeesCount");
+        const inactiveEl = document.getElementById("inactiveEmployeesCount");
+
+        if (totalEl) totalEl.textContent = data.total_employees;
+        if (activeEl) activeEl.textContent = data.active_employees;
+        if (inactiveEl) inactiveEl.textContent = data.inactive_employees;
+    } catch (error) {
+        console.error("Employee stats error:", error);
+    }
+}
+
+async function loadBranchesForEmployeeFilter() {
+    const branchFilter = document.getElementById("employeeBranchFilter");
+    const branchSelect = document.getElementById("employeeBranchSelect");
+    if (!branchFilter && !branchSelect) return;
+
+    try {
+        const response = await fetch("/api/branches");
+        if (!response.ok) return;
+        const branches = await response.json();
+
+        if (branchFilter) {
+            const currentVal = branchFilter.value;
+            branchFilter.innerHTML = '<option value="">All Branches</option>';
+            branches.forEach(b => {
+                const opt = document.createElement("option");
+                opt.value = b.branch_id;
+                opt.textContent = `${b.branch_name} (${b.city})`;
+                branchFilter.appendChild(opt);
+            });
+            branchFilter.value = currentVal;
+        }
+
+        if (branchSelect) {
+            branchSelect.innerHTML = '<option value="">Select branch</option>';
+            branches.forEach(b => {
+                const opt = document.createElement("option");
+                opt.value = b.branch_id;
+                opt.textContent = `${b.branch_name} (${b.city})`;
+                branchSelect.appendChild(opt);
+            });
+        }
+    } catch (e) {
+        console.error("Failed to load branches for employee filter:", e);
+    }
+}
+
+async function loadEmployeesTable() {
+    const tableBody = document.getElementById("employeesTableBody");
+    if (!tableBody) return;
+
+    const searchInput = document.getElementById("employeesSearchInput");
+    const statusFilter = document.getElementById("employeeStatusFilter");
+    const branchFilter = document.getElementById("employeeBranchFilter");
+
+    const params = new URLSearchParams();
+    if (searchInput && searchInput.value.trim()) params.append("search", searchInput.value.trim());
+    if (statusFilter && statusFilter.value) params.append("status", statusFilter.value);
+    if (branchFilter && branchFilter.value) params.append("branch_id", branchFilter.value);
+
+    try {
+        tableBody.innerHTML = `<tr><td colspan="8" class="empty-state"><i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px;"></i>Loading employees...</td></tr>`;
+
+        const response = await fetch(`/api/employees?${params.toString()}`);
+        if (!response.ok) throw new Error("Could not load employees");
+        const employees = await response.json();
+
+        if (!employees || employees.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="8" class="empty-state">No matching employees found</td></tr>`;
+            return;
+        }
+
+        tableBody.innerHTML = "";
+        employees.forEach(emp => {
+            const tr = document.createElement("tr");
+            const statusClass = emp.status === "Active" ? "status-delivered" : "status-out";
+            const toggleIcon = emp.status === "Active" ? "fa-user-slash" : "fa-user-check";
+            const toggleTitle = emp.status === "Active" ? "Deactivate Employee" : "Reactivate Employee";
+
+            tr.innerHTML = `
+                <td><strong>#EMP-${emp.employee_id}</strong></td>
+                <td>
+                    <div style="font-weight: 700; color: #f2f4f7;">${escapeHtml(emp.name)}</div>
+                    ${emp.active_shipments > 0 ? `<small style="color: #60a5fa;"><i class="fa-solid fa-truck" style="margin-right: 4px;"></i>${emp.active_shipments} active in transit</small>` : ''}
+                </td>
+                <td>${escapeHtml(emp.phone)}</td>
+                <td><span style="color: #cbd5e1; font-size: 13px;">${escapeHtml(emp.email || 'N/A')}</span></td>
+                <td><span class="cell-subtext" style="color: #e2e8f0; font-weight: 600;">${escapeHtml(emp.role)}</span></td>
+                <td>
+                    <div style="font-weight: 600;">${escapeHtml(emp.branch_name)}</div>
+                    <small style="color: #808ea3;">${escapeHtml(emp.city)}</small>
+                </td>
+                <td>
+                    <span class="status-badge ${statusClass}">
+                        ${escapeHtml(emp.status || 'Active')}
+                    </span>
+                </td>
+                <td style="text-align: right;">
+                    <div style="display: inline-flex; gap: 6px; justify-content: flex-end;">
+                        <button type="button" class="ghost-button" onclick="viewEmployeeDetails(${emp.employee_id})" title="View Employee Details">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                        <button type="button" class="ghost-button" onclick='openEmployeeModal(${JSON.stringify(emp).replace(/'/g, "&apos;")})' title="Edit Employee">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button type="button" class="ghost-button" onclick="toggleEmployeeStatus(${emp.employee_id})" title="${toggleTitle}">
+                            <i class="fa-solid ${toggleIcon}"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            tableBody.appendChild(tr);
+        });
+    } catch (error) {
+        console.error("Error loading employees table:", error);
+        tableBody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color: #f87171;">Failed to load employees. Check database connection.</td></tr>`;
+    }
+}
+
+async function openEmployeeModal(emp = null) {
+    const modal = document.getElementById("employeeModal");
+    const title = document.getElementById("employeeModalTitle");
+    const subtitle = document.getElementById("employeeModalSubtitle");
+    const idInput = document.getElementById("employeeFormId");
+    const nameInput = document.getElementById("employeeNameInput");
+    const emailInput = document.getElementById("employeeEmailInput");
+    const phoneInput = document.getElementById("employeePhoneInput");
+    const roleInput = document.getElementById("employeeRoleInput");
+    const branchSelect = document.getElementById("employeeBranchSelect");
+    const statusSelect = document.getElementById("employeeStatusSelect");
+    const messageEl = document.getElementById("employeeFormMessage");
+
+    if (messageEl) {
+        messageEl.textContent = "";
+        messageEl.className = "form-message";
+    }
+
+    await loadBranchesForEmployeeFilter();
+
+    if (emp) {
+        if (title) title.textContent = "Edit Employee";
+        if (subtitle) subtitle.textContent = `Update employee profile details (#EMP-${emp.employee_id}).`;
+        if (idInput) idInput.value = emp.employee_id;
+        if (nameInput) nameInput.value = emp.name;
+        if (emailInput) emailInput.value = emp.email || "";
+        if (phoneInput) phoneInput.value = emp.phone;
+        if (roleInput) roleInput.value = emp.role;
+        if (branchSelect) branchSelect.value = emp.branch_id;
+        if (statusSelect) statusSelect.value = emp.status || "Active";
+    } else {
+        if (title) title.textContent = "New Employee";
+        if (subtitle) subtitle.textContent = "Register a new staff profile and branch assignment.";
+        if (idInput) idInput.value = "";
+        if (nameInput) nameInput.value = "";
+        if (emailInput) emailInput.value = "";
+        if (phoneInput) phoneInput.value = "";
+        if (roleInput) roleInput.value = "";
+        if (branchSelect) branchSelect.value = "";
+        if (statusSelect) statusSelect.value = "Active";
+    }
+
+    if (modal) {
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+    }
+}
+
+function closeEmployeeModal() {
+    const modal = document.getElementById("employeeModal");
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+async function handleEmployeeFormSubmit(e) {
+    e.preventDefault();
+    const idInput = document.getElementById("employeeFormId");
+    const nameInput = document.getElementById("employeeNameInput");
+    const emailInput = document.getElementById("employeeEmailInput");
+    const phoneInput = document.getElementById("employeePhoneInput");
+    const roleInput = document.getElementById("employeeRoleInput");
+    const branchSelect = document.getElementById("employeeBranchSelect");
+    const statusSelect = document.getElementById("employeeStatusSelect");
+    const messageEl = document.getElementById("employeeFormMessage");
+    const submitBtn = document.getElementById("submitEmployeeButton");
+
+    const empId = idInput ? idInput.value.trim() : "";
+    const isEdit = Boolean(empId);
+
+    const payload = {
+        name: nameInput.value.trim(),
+        email: emailInput.value.trim(),
+        phone: phoneInput.value.trim(),
+        role: roleInput.value.trim(),
+        branch_id: parseInt(branchSelect.value, 10),
+        status: statusSelect.value
+    };
+
+    try {
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Saving...</span>`;
+        }
+
+        const url = isEdit ? `/api/employees/${empId}` : "/api/employees";
+        const method = isEdit ? "PUT" : "POST";
+
+        const response = await fetch(url, {
+            method: method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Failed to save employee profile.");
+        }
+
+        closeEmployeeModal();
+        showToast(isEdit ? "Employee Updated" : "Employee Created", isEdit ? "Staff profile updated successfully." : "New staff member registered in MySQL.");
+        loadEmployeeStats();
+        loadEmployeesTable();
+    } catch (error) {
+        if (messageEl) {
+            messageEl.textContent = error.message;
+            messageEl.className = "form-message error";
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-check"></i><span>Save Employee</span>`;
+        }
+    }
+}
+
+async function viewEmployeeDetails(employeeId) {
+    const modal = document.getElementById("employeeDetailsModal");
+    const nameEl = document.getElementById("detailEmployeeName");
+    const metaEl = document.getElementById("detailEmployeeMeta");
+    const statusEl = document.getElementById("detailEmployeeStatus");
+    const roleEl = document.getElementById("detailEmployeeRole");
+    const contactEl = document.getElementById("detailEmployeeContact");
+    const branchEl = document.getElementById("detailEmployeeBranch");
+    const totalShipmentsEl = document.getElementById("detailEmployeeTotalShipments");
+    const activeShipmentsEl = document.getElementById("detailEmployeeActiveShipments");
+    const tableBody = document.getElementById("detailEmployeeShipmentsTable");
+
+    if (modal) {
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+    }
+
+    try {
+        if (nameEl) nameEl.textContent = "Loading employee...";
+        if (metaEl) metaEl.textContent = `Employee ID: #EMP-${employeeId}`;
+
+        const response = await fetch(`/api/employees/${employeeId}`);
+        if (!response.ok) throw new Error("Could not load employee details");
+        const emp = await response.json();
+
+        if (nameEl) nameEl.textContent = emp.name;
+        if (metaEl) metaEl.textContent = `Employee ID: #EMP-${emp.employee_id} • Assigned Hub: ${emp.branch_name}`;
+        if (statusEl) {
+            const statusClass = emp.status === "Active" ? "status-delivered" : "status-out";
+            statusEl.innerHTML = `<span class="status-badge ${statusClass}">${escapeHtml(emp.status)}</span>`;
+        }
+        if (roleEl) roleEl.textContent = emp.role;
+        if (contactEl) contactEl.innerHTML = `<div><i class="fa-solid fa-phone" style="width: 16px; margin-right: 6px; color: #808ea3;"></i>${escapeHtml(emp.phone)}</div><div style="margin-top: 4px;"><i class="fa-solid fa-envelope" style="width: 16px; margin-right: 6px; color: #808ea3;"></i>${escapeHtml(emp.email || 'N/A')}</div>`;
+        if (branchEl) branchEl.innerHTML = `<div>${escapeHtml(emp.branch_name)}</div><small style="color: #808ea3;">${escapeHtml(emp.city)}, ${escapeHtml(emp.state)}</small>`;
+        if (totalShipmentsEl) totalShipmentsEl.textContent = emp.total_shipments || 0;
+        if (activeShipmentsEl) activeShipmentsEl.textContent = emp.active_shipments || 0;
+
+        if (tableBody) {
+            if (!emp.shipments || emp.shipments.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5" class="empty-state">No shipments assigned to this employee yet</td></tr>`;
+            } else {
+                tableBody.innerHTML = "";
+                emp.shipments.forEach(s => {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td><strong>${escapeHtml(s.tracking_number)}</strong></td>
+                        <td>${createStatusBadge(s.parcel_status)}</td>
+                        <td>${escapeHtml(s.origin_city)} → ${escapeHtml(s.destination_city)}</td>
+                        <td>${escapeHtml(s.vehicle_number)}</td>
+                        <td>${escapeHtml(s.shipment_date)}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            }
+        }
+    } catch (error) {
+        console.error("Error viewing employee details:", error);
+        showToast("Error", "Could not load employee details.");
+    }
+}
+
+function closeEmployeeDetailsModal() {
+    const modal = document.getElementById("employeeDetailsModal");
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+async function toggleEmployeeStatus(employeeId) {
+    try {
+        const response = await fetch(`/api/employees/${employeeId}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" }
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+            alert(result.error || "Cannot change employee status.");
+            showToast("Action Blocked", result.error || "Cannot deactivate employee.", "error");
+            return;
+        }
+
+        showToast("Status Updated", result.message);
+        loadEmployeeStats();
+        loadEmployeesTable();
+    } catch (error) {
+        console.error("Error toggling employee status:", error);
+        showToast("Error", error.message || "Failed to update status.");
+    }
+}
+
+
+// =========================================================
+// PAYMENTS MANAGEMENT
+// =========================================================
+
+let paymentsSearchDebounceTimer = null;
+let currentActivePaymentIdForQr = null;
+
+function setupPaymentsView() {
+    const searchInput = document.getElementById("paymentsSearchInput");
+    const statusFilter = document.getElementById("paymentStatusFilter");
+    const methodFilter = document.getElementById("paymentMethodFilter");
+    const resetBtn = document.getElementById("resetPaymentFilters");
+    const refreshBtn = document.getElementById("refreshPaymentsButton");
+    const newBtn = document.getElementById("newPaymentButton");
+    const closeBtn = document.getElementById("closePaymentModal");
+    const cancelBtn = document.getElementById("cancelPaymentModal");
+    const form = document.getElementById("paymentForm");
+    const parcelSelect = document.getElementById("paymentParcelSelect");
+    const closeDetailsBtn = document.getElementById("closePaymentDetailsModal");
+    const dismissDetailsBtn = document.getElementById("dismissPaymentDetailsButton");
+    const detailsQrBtn = document.getElementById("paymentDetailsQrButton");
+
+    if (searchInput) {
+        searchInput.addEventListener("input", () => {
+            clearTimeout(paymentsSearchDebounceTimer);
+            paymentsSearchDebounceTimer = setTimeout(() => {
+                loadPaymentsTable();
+            }, 300);
+        });
+    }
+
+    if (statusFilter) statusFilter.addEventListener("change", () => loadPaymentsTable());
+    if (methodFilter) methodFilter.addEventListener("change", () => loadPaymentsTable());
+
+    if (resetBtn) {
+        resetBtn.addEventListener("click", () => {
+            if (searchInput) searchInput.value = "";
+            if (statusFilter) statusFilter.value = "";
+            if (methodFilter) methodFilter.value = "";
+            loadPaymentsTable();
+        });
+    }
+
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", () => {
+            loadPaymentStats();
+            loadPaymentsTable();
+            showToast("Payments Refreshed", "Transaction history reloaded.");
+        });
+    }
+
+    if (newBtn) newBtn.addEventListener("click", openCreatePaymentModal);
+    if (closeBtn) closeBtn.addEventListener("click", closePaymentModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closePaymentModal);
+    if (form) form.addEventListener("submit", handlePaymentFormSubmit);
+
+    if (parcelSelect) {
+        parcelSelect.addEventListener("change", () => {
+            const selectedOpt = parcelSelect.options[parcelSelect.selectedIndex];
+            const customerDisplay = document.getElementById("paymentCustomerDisplay");
+            const amountInput = document.getElementById("paymentAmountInput");
+
+            if (selectedOpt && selectedOpt.dataset.customer) {
+                if (customerDisplay) customerDisplay.value = selectedOpt.dataset.customer;
+                if (amountInput) amountInput.value = selectedOpt.dataset.cost || "";
+            } else {
+                if (customerDisplay) customerDisplay.value = "";
+                if (amountInput) amountInput.value = "";
+            }
+        });
+    }
+
+    if (closeDetailsBtn) closeDetailsBtn.addEventListener("click", closePaymentDetailsModal);
+    if (dismissDetailsBtn) dismissDetailsBtn.addEventListener("click", closePaymentDetailsModal);
+
+    if (detailsQrBtn) {
+        detailsQrBtn.addEventListener("click", () => {
+            closePaymentDetailsModal();
+            if (currentActivePaymentIdForQr) {
+                openPaymentQrModal(currentActivePaymentIdForQr);
+            }
+        });
+    }
+}
+
+async function loadPaymentStats() {
+    try {
+        const response = await fetch("/api/payments/stats");
+        if (!response.ok) throw new Error("Failed to load payment stats");
+        const data = await response.json();
+
+        const totalEl = document.getElementById("totalPaymentsCount");
+        const revenueEl = document.getElementById("totalCollectedRevenue");
+        const pendingEl = document.getElementById("pendingPaymentsCount");
+        const refundedEl = document.getElementById("refundedPaymentsCount");
+
+        if (totalEl) totalEl.textContent = data.total_payments;
+        if (revenueEl) revenueEl.textContent = `₹${data.total_collected.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (pendingEl) pendingEl.textContent = data.pending_payments;
+        if (refundedEl) refundedEl.textContent = data.refunded_payments;
+    } catch (error) {
+        console.error("Payment stats error:", error);
+    }
+}
+
+async function loadPaymentsTable() {
+    const tableBody = document.getElementById("paymentsTableBody");
+    if (!tableBody) return;
+
+    const searchInput = document.getElementById("paymentsSearchInput");
+    const statusFilter = document.getElementById("paymentStatusFilter");
+    const methodFilter = document.getElementById("paymentMethodFilter");
+
+    const params = new URLSearchParams();
+    if (searchInput && searchInput.value.trim()) params.append("search", searchInput.value.trim());
+    if (statusFilter && statusFilter.value) params.append("status", statusFilter.value);
+    if (methodFilter && methodFilter.value) params.append("method", methodFilter.value);
+
+    try {
+        tableBody.innerHTML = `<tr><td colspan="8" class="empty-state"><i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px;"></i>Loading payments...</td></tr>`;
+
+        const response = await fetch(`/api/payments?${params.toString()}`);
+        if (!response.ok) throw new Error("Could not load payments");
+        const payments = await response.json();
+
+        if (!payments || payments.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="8" class="empty-state">No payment records found</td></tr>`;
+            return;
+        }
+
+        tableBody.innerHTML = "";
+        payments.forEach(py => {
+            const tr = document.createElement("tr");
+
+            let statusBadgeClass = "status-pending";
+            if (py.payment_status === "Paid") statusBadgeClass = "status-delivered";
+            else if (py.payment_status === "Refunded") statusBadgeClass = "status-out";
+
+            tr.innerHTML = `
+                <td><strong>#PAY-${py.payment_id}</strong></td>
+                <td>
+                    <div style="font-weight: 700; color: #f2f4f7;">${escapeHtml(py.tracking_number)}</div>
+                    <small style="color: #808ea3;">${escapeHtml(py.origin_city)} → ${escapeHtml(py.destination_city)}</small>
+                </td>
+                <td>
+                    <div style="font-weight: 600;">${escapeHtml(py.customer_name)}</div>
+                    <small style="color: #808ea3;">${escapeHtml(py.customer_phone)}</small>
+                </td>
+                <td><strong style="color: #4ade80;">₹${Number(py.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></td>
+                <td><span style="font-size: 13px; color: #cbd5e1;">${escapeHtml(py.payment_method)}</span></td>
+                <td>
+                    <span class="status-badge ${statusBadgeClass}">
+                        ${escapeHtml(py.payment_status)}
+                    </span>
+                </td>
+                <td><span style="font-size: 13px; color: #94a3b8;">${escapeHtml(py.payment_date || 'Pending')}</span></td>
+                <td style="text-align: right;">
+                    <div style="display: inline-flex; gap: 6px; justify-content: flex-end;">
+                        <button type="button" class="ghost-button" onclick="viewPaymentDetails(${py.payment_id})" title="View Payment Details">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                        <button type="button" class="ghost-button" onclick="openPaymentQrModal(${py.payment_id})" title="Generate Payment QR Code" style="color: #60a5fa;">
+                            <i class="fa-solid fa-qrcode"></i>
+                        </button>
+                        ${py.payment_status === "Unpaid" ? `
+                        <button type="button" class="ghost-button" onclick="updatePaymentStatus(${py.payment_id}, 'Paid')" title="Mark as Paid" style="color: #4ade80;">
+                            <i class="fa-solid fa-circle-check"></i>
+                        </button>` : ''}
+                    </div>
+                </td>
+            `;
+            tableBody.appendChild(tr);
+        });
+    } catch (error) {
+        console.error("Error loading payments table:", error);
+        tableBody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color: #f87171;">Failed to load payments.</td></tr>`;
+    }
+}
+
+async function openCreatePaymentModal() {
+    const modal = document.getElementById("paymentModal");
+    const parcelSelect = document.getElementById("paymentParcelSelect");
+    const customerDisplay = document.getElementById("paymentCustomerDisplay");
+    const amountInput = document.getElementById("paymentAmountInput");
+    const messageEl = document.getElementById("paymentFormMessage");
+
+    if (messageEl) {
+        messageEl.textContent = "";
+        messageEl.className = "form-message";
+    }
+
+    if (customerDisplay) customerDisplay.value = "";
+    if (amountInput) amountInput.value = "";
+
+    try {
+        if (parcelSelect) {
+            parcelSelect.innerHTML = `<option value="">Loading unpaid parcels...</option>`;
+            const res = await fetch("/api/payments/unpaid-parcels");
+            if (!res.ok) throw new Error("Could not load parcels");
+            const unpaidParcels = await res.json();
+
+            if (!unpaidParcels || unpaidParcels.length === 0) {
+                parcelSelect.innerHTML = `<option value="">All parcels currently have invoices recorded</option>`;
+            } else {
+                parcelSelect.innerHTML = `<option value="">Select an unpaid parcel...</option>`;
+                unpaidParcels.forEach(p => {
+                    const opt = document.createElement("option");
+                    opt.value = p.parcel_id;
+                    opt.dataset.customer = `${p.customer_name} (${p.customer_email || 'No email'})`;
+                    opt.dataset.cost = p.shipping_cost;
+                    opt.textContent = `${p.tracking_number} — ₹${Number(p.shipping_cost).toFixed(2)} (${p.customer_name})`;
+                    parcelSelect.appendChild(opt);
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Error loading unpaid parcels:", e);
+    }
+
+    if (modal) {
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+    }
+}
+
+function closePaymentModal() {
+    const modal = document.getElementById("paymentModal");
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+async function handlePaymentFormSubmit(e) {
+    e.preventDefault();
+    const parcelSelect = document.getElementById("paymentParcelSelect");
+    const amountInput = document.getElementById("paymentAmountInput");
+    const methodSelect = document.getElementById("paymentMethodSelect");
+    const statusSelect = document.getElementById("paymentStatusSelect");
+    const messageEl = document.getElementById("paymentFormMessage");
+    const submitBtn = document.getElementById("submitPaymentButton");
+
+    const payload = {
+        parcel_id: parseInt(parcelSelect.value, 10),
+        amount: parseFloat(amountInput.value),
+        payment_method: methodSelect.value,
+        payment_status: statusSelect.value
+    };
+
+    try {
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Recording...</span>`;
+        }
+
+        const response = await fetch("/api/payments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Failed to record payment.");
+        }
+
+        closePaymentModal();
+        showToast("Payment Recorded", `Invoice #PAY-${result.payment_id} recorded in MySQL.`);
+        loadPaymentStats();
+        loadPaymentsTable();
+    } catch (error) {
+        if (messageEl) {
+            messageEl.textContent = error.message;
+            messageEl.className = "form-message error";
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-check"></i><span>Save Payment</span>`;
+        }
+    }
+}
+
+async function viewPaymentDetails(paymentId) {
+    currentActivePaymentIdForQr = paymentId;
+    const modal = document.getElementById("paymentDetailsModal");
+    const titleEl = document.getElementById("detailPaymentTitle");
+    const metaEl = document.getElementById("detailPaymentMeta");
+    const statusEl = document.getElementById("detailPaymentStatus");
+    const amountEl = document.getElementById("detailPaymentAmount");
+    const methodEl = document.getElementById("detailPaymentMethod");
+    const dateEl = document.getElementById("detailPaymentDate");
+    const trackingEl = document.getElementById("detailPaymentTracking");
+    const customerEl = document.getElementById("detailPaymentCustomer");
+    const routeEl = document.getElementById("detailPaymentRoute");
+
+    if (modal) {
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+    }
+
+    try {
+        if (titleEl) titleEl.textContent = "Loading transaction...";
+        const response = await fetch(`/api/payments/${paymentId}`);
+        if (!response.ok) throw new Error("Could not load payment details");
+        const py = await response.json();
+
+        if (titleEl) titleEl.textContent = `Payment #PAY-${py.payment_id}`;
+        if (metaEl) metaEl.textContent = `Invoice Ref: CX-PAY-${String(py.payment_id).padStart(5, '0')} • Tracking: ${py.tracking_number}`;
+
+        if (statusEl) {
+            let statusBadgeClass = "status-pending";
+            if (py.payment_status === "Paid") statusBadgeClass = "status-delivered";
+            else if (py.payment_status === "Refunded") statusBadgeClass = "status-out";
+            statusEl.innerHTML = `<span class="status-badge ${statusBadgeClass}">${escapeHtml(py.payment_status)}</span>`;
+        }
+
+        if (amountEl) amountEl.textContent = `₹${Number(py.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        if (methodEl) methodEl.textContent = py.payment_method;
+        if (dateEl) dateEl.textContent = py.payment_date || "Pending (Not Settled)";
+        if (trackingEl) trackingEl.innerHTML = `<strong>${escapeHtml(py.tracking_number)}</strong> <small style="display: block; color: #808ea3;">${escapeHtml(py.parcel_type)} • ${py.weight} kg</small>`;
+        if (customerEl) customerEl.innerHTML = `<div>${escapeHtml(py.customer_name)}</div><small style="color: #808ea3;">${escapeHtml(py.customer_email || 'No email')} • ${escapeHtml(py.customer_phone)}</small>`;
+        if (routeEl) routeEl.textContent = `${py.origin_branch} (${py.origin_city}) → ${py.destination_branch} (${py.destination_city})`;
+    } catch (e) {
+        console.error("Error loading payment details:", e);
+        showToast("Error", "Could not load payment transaction details.");
+    }
+}
+
+function closePaymentDetailsModal() {
+    const modal = document.getElementById("paymentDetailsModal");
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+async function updatePaymentStatus(paymentId, newStatus) {
+    try {
+        const response = await fetch(`/api/payments/${paymentId}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: newStatus })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Failed to update status");
+
+        showToast("Payment Updated", `Payment marked as ${newStatus}.`);
+        loadPaymentStats();
+        loadPaymentsTable();
+    } catch (error) {
+        console.error("Status update error:", error);
+        showToast("Error", error.message);
+    }
+}
+
+
+// =========================================================
+// PAYMENT QR CODE GENERATION & DOWNLOAD
+// =========================================================
+
+let currentQrSvgContent = "";
+let currentQrReference = "";
+
+function setupPaymentQrModal() {
+    const closeBtn = document.getElementById("closePaymentQrModal");
+    const dismissBtn = document.getElementById("dismissPaymentQrButton");
+    const downloadBtn = document.getElementById("downloadQrButton");
+
+    if (closeBtn) closeBtn.addEventListener("click", closePaymentQrModal);
+    if (dismissBtn) dismissBtn.addEventListener("click", closePaymentQrModal);
+    if (downloadBtn) downloadBtn.addEventListener("click", downloadPaymentQr);
+}
+
+async function openPaymentQrModal(paymentId) {
+    const modal = document.getElementById("paymentQrModal");
+    const qrContainer = document.getElementById("paymentQrContainer");
+    const refEl = document.getElementById("qrRefCode");
+    const amountEl = document.getElementById("qrAmountDisplay");
+    const trackingEl = document.getElementById("qrTrackingDisplay");
+    const statusEl = document.getElementById("qrStatusDisplay");
+
+    if (modal) {
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+    }
+
+    if (qrContainer) {
+        qrContainer.innerHTML = `
+            <div id="qrLoadingSpinner" style="color: #64748b; font-size: 14px; text-align: center; padding: 20px;">
+                <i class="fa-solid fa-spinner fa-spin" style="font-size: 26px; display: block; margin-bottom: 10px; color: #3b82f6;"></i>
+                Generating dynamic QR code from database...
+            </div>
+        `;
+    }
+
+    try {
+        const response = await fetch(`/api/payments/${paymentId}/qr`);
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || "Failed to generate QR code.");
+        }
+
+        const data = await response.json();
+        currentQrSvgContent = data.qr_svg;
+        currentQrReference = data.reference;
+
+        if (refEl) refEl.textContent = data.reference;
+        if (amountEl) amountEl.textContent = `₹${Number(data.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+        if (trackingEl) trackingEl.textContent = data.tracking_number;
+        if (statusEl) {
+            statusEl.textContent = data.payment_status;
+            statusEl.className = `status-badge ${data.payment_status === 'Paid' ? 'status-delivered' : (data.payment_status === 'Refunded' ? 'status-out' : 'status-pending')}`;
+        }
+
+        if (qrContainer) {
+            qrContainer.innerHTML = data.qr_svg;
+            const svgEl = qrContainer.querySelector("svg");
+            if (svgEl) {
+                svgEl.style.width = "100%";
+                svgEl.style.height = "auto";
+                svgEl.style.maxWidth = "240px";
+                svgEl.style.display = "block";
+            }
+        }
+    } catch (error) {
+        console.error("QR Generation error:", error);
+        if (qrContainer) {
+            qrContainer.innerHTML = `
+                <div style="color: #ef4444; font-size: 13px; text-align: center; padding: 15px;">
+                    <i class="fa-solid fa-triangle-exclamation" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
+                    ${escapeHtml(error.message)}
+                </div>
+            `;
+        }
+    }
+}
+
+function closePaymentQrModal() {
+    const modal = document.getElementById("paymentQrModal");
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+function downloadPaymentQr() {
+    if (!currentQrSvgContent) {
+        showToast("Download Unavailable", "No QR code available to download.", "error");
+        return;
+    }
+
+    try {
+        const blob = new Blob([currentQrSvgContent], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `CourierX_Payment_${currentQrReference || 'QR'}.svg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast("QR Downloaded", `Saved CourierX_Payment_${currentQrReference || 'QR'}.svg`);
+    } catch (e) {
+        console.error("Failed to download QR code:", e);
+        showToast("Error", "Could not download QR code.");
+    }
+}
+
+
+// =========================================================
+// FEEDBACK MANAGEMENT
+// =========================================================
+
+let feedbackSearchDebounceTimer = null;
+
+function setupFeedbackView() {
+    const searchInput = document.getElementById("feedbackSearchInput");
+    const ratingFilter = document.getElementById("feedbackRatingFilter");
+    const resetBtn = document.getElementById("resetFeedbackFilters");
+    const refreshBtn = document.getElementById("refreshFeedbackButton");
+    const newBtn = document.getElementById("newFeedbackButton");
+    const closeBtn = document.getElementById("closeFeedbackModal");
+    const cancelBtn = document.getElementById("cancelFeedbackModal");
+    const form = document.getElementById("feedbackForm");
+    const parcelSelect = document.getElementById("feedbackParcelSelect");
+    const closeDetailsBtn = document.getElementById("closeFeedbackDetailsModal");
+    const dismissDetailsBtn = document.getElementById("dismissFeedbackDetailsButton");
+    const starPicker = document.getElementById("starRatingPicker");
+
+    if (searchInput) {
+        searchInput.addEventListener("input", () => {
+            clearTimeout(feedbackSearchDebounceTimer);
+            feedbackSearchDebounceTimer = setTimeout(() => {
+                loadFeedbackTable();
+            }, 300);
+        });
+    }
+
+    if (ratingFilter) ratingFilter.addEventListener("change", () => loadFeedbackTable());
+
+    if (resetBtn) {
+        resetBtn.addEventListener("click", () => {
+            if (searchInput) searchInput.value = "";
+            if (ratingFilter) ratingFilter.value = "";
+            loadFeedbackTable();
+        });
+    }
+
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", () => {
+            loadFeedbackStats();
+            loadFeedbackTable();
+            showToast("Feedback Refreshed", "Customer reviews reloaded.");
+        });
+    }
+
+    if (newBtn) newBtn.addEventListener("click", openSubmitFeedbackModal);
+    if (closeBtn) closeBtn.addEventListener("click", closeFeedbackModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeFeedbackModal);
+    if (form) form.addEventListener("submit", handleFeedbackFormSubmit);
+
+    if (parcelSelect) {
+        parcelSelect.addEventListener("change", () => {
+            const selectedOpt = parcelSelect.options[parcelSelect.selectedIndex];
+            const customerDisplay = document.getElementById("feedbackCustomerDisplay");
+            if (selectedOpt && selectedOpt.dataset.customer) {
+                if (customerDisplay) customerDisplay.value = selectedOpt.dataset.customer;
+            } else {
+                if (customerDisplay) customerDisplay.value = "";
+            }
+        });
+    }
+
+    if (starPicker) {
+        starPicker.querySelectorAll(".star-item").forEach(star => {
+            star.addEventListener("click", () => {
+                const rating = parseInt(star.dataset.rating, 10);
+                setStarRating(rating);
+            });
+            star.addEventListener("mouseenter", () => {
+                const rating = parseInt(star.dataset.rating, 10);
+                highlightStars(rating);
+            });
+        });
+        starPicker.addEventListener("mouseleave", () => {
+            const currentRating = parseInt(document.getElementById("feedbackRatingInput").value || "5", 10);
+            highlightStars(currentRating);
+        });
+    }
+
+    if (closeDetailsBtn) closeDetailsBtn.addEventListener("click", closeFeedbackDetailsModal);
+    if (dismissDetailsBtn) dismissDetailsBtn.addEventListener("click", closeFeedbackDetailsModal);
+}
+
+function setStarRating(rating) {
+    const input = document.getElementById("feedbackRatingInput");
+    const label = document.getElementById("starRatingLabel");
+    if (input) input.value = rating;
+
+    const descriptions = {
+        1: "1 Star — Critical / Unsatisfactory",
+        2: "2 Stars — Below Expectations",
+        3: "3 Stars — Average Service",
+        4: "4 Stars — Good / Prompt",
+        5: "5 Stars — Excellent Experience"
+    };
+
+    if (label) label.textContent = descriptions[rating] || `${rating} Stars`;
+    highlightStars(rating);
+}
+
+function highlightStars(rating) {
+    const starPicker = document.getElementById("starRatingPicker");
+    if (!starPicker) return;
+    starPicker.querySelectorAll(".star-item").forEach(s => {
+        const r = parseInt(s.dataset.rating, 10);
+        if (r <= rating) {
+            s.style.color = "#fbbf24";
+        } else {
+            s.style.color = "#334155";
+        }
+    });
+}
+
+async function loadFeedbackStats() {
+    try {
+        const response = await fetch("/api/feedback/stats");
+        if (!response.ok) throw new Error("Failed to load feedback stats");
+        const data = await response.json();
+
+        const totalEl = document.getElementById("totalFeedbackCount");
+        const avgEl = document.getElementById("avgFeedbackRating");
+        const fiveEl = document.getElementById("fiveStarFeedbackCount");
+        const oneEl = document.getElementById("oneStarFeedbackCount");
+
+        if (totalEl) totalEl.textContent = data.total_feedback;
+        if (avgEl) avgEl.innerHTML = `${data.average_rating} <span style="font-size: 16px; color: #fbbf24;">★</span>`;
+        if (fiveEl) fiveEl.textContent = data.distribution ? (data.distribution["5"] || 0) : 0;
+        if (oneEl) oneEl.textContent = data.distribution ? (data.distribution["1"] || 0) : 0;
+    } catch (e) {
+        console.error("Feedback stats error:", e);
+    }
+}
+
+async function loadFeedbackTable() {
+    const tableBody = document.getElementById("feedbackTableBody");
+    if (!tableBody) return;
+
+    const searchInput = document.getElementById("feedbackSearchInput");
+    const ratingFilter = document.getElementById("feedbackRatingFilter");
+
+    const params = new URLSearchParams();
+    if (searchInput && searchInput.value.trim()) params.append("search", searchInput.value.trim());
+    if (ratingFilter && ratingFilter.value) params.append("rating", ratingFilter.value);
+
+    try {
+        tableBody.innerHTML = `<tr><td colspan="7" class="empty-state"><i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px;"></i>Loading feedback...</td></tr>`;
+
+        const response = await fetch(`/api/feedback?${params.toString()}`);
+        if (!response.ok) throw new Error("Could not load feedback");
+        const feedbackList = await response.json();
+
+        if (!feedbackList || feedbackList.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="7" class="empty-state">No feedback records found</td></tr>`;
+            return;
+        }
+
+        tableBody.innerHTML = "";
+        feedbackList.forEach(fb => {
+            const tr = document.createElement("tr");
+
+            let starsHtml = "";
+            for (let i = 1; i <= 5; i++) {
+                if (i <= fb.rating) {
+                    starsHtml += `<i class="fa-solid fa-star" style="color: #fbbf24; margin-right: 2px;"></i>`;
+                } else {
+                    starsHtml += `<i class="fa-regular fa-star" style="color: #475569; margin-right: 2px;"></i>`;
+                }
+            }
+
+            const commentSnippet = fb.comments ? (fb.comments.length > 55 ? fb.comments.substring(0, 55) + "..." : fb.comments) : "<em style='color: #64748b;'>No written comment</em>";
+
+            tr.innerHTML = `
+                <td><strong>#REV-${fb.feedback_id}</strong></td>
+                <td>
+                    <div style="font-weight: 700; color: #f2f4f7;">${escapeHtml(fb.tracking_number)}</div>
+                    <small style="color: #808ea3;">${escapeHtml(fb.parcel_status)}</small>
+                </td>
+                <td>
+                    <div style="font-weight: 600;">${escapeHtml(fb.customer_name)}</div>
+                    <small style="color: #808ea3;">${escapeHtml(fb.customer_email || fb.customer_phone)}</small>
+                </td>
+                <td>
+                    <div style="display: inline-flex; align-items: center;" title="${fb.rating} of 5 stars">
+                        ${starsHtml}
+                        <strong style="margin-left: 6px; font-size: 13px; color: #fbbf24;">${fb.rating}.0</strong>
+                    </div>
+                </td>
+                <td style="max-width: 280px; color: #cbd5e1; font-size: 13px;">${escapeHtml(commentSnippet)}</td>
+                <td><span style="font-size: 13px; color: #94a3b8;">${escapeHtml(fb.feedback_date)}</span></td>
+                <td style="text-align: right;">
+                    <button type="button" class="ghost-button" onclick="viewFeedbackDetails(${fb.feedback_id})" title="View Complete Feedback">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error("Error loading feedback:", e);
+        tableBody.innerHTML = `<tr><td colspan="7" class="empty-state" style="color: #f87171;">Failed to load feedback.</td></tr>`;
+    }
+}
+
+async function openSubmitFeedbackModal() {
+    const modal = document.getElementById("feedbackModal");
+    const parcelSelect = document.getElementById("feedbackParcelSelect");
+    const customerDisplay = document.getElementById("feedbackCustomerDisplay");
+    const commentsInput = document.getElementById("feedbackCommentsInput");
+    const messageEl = document.getElementById("feedbackFormMessage");
+
+    if (messageEl) {
+        messageEl.textContent = "";
+        messageEl.className = "form-message";
+    }
+
+    if (customerDisplay) customerDisplay.value = "";
+    if (commentsInput) commentsInput.value = "";
+    setStarRating(5);
+
+    try {
+        if (parcelSelect) {
+            parcelSelect.innerHTML = `<option value="">Loading eligible parcels...</option>`;
+            const res = await fetch("/api/feedback/eligible-parcels");
+            if (!res.ok) throw new Error("Could not load eligible parcels");
+            const eligible = await res.json();
+
+            if (!eligible || eligible.length === 0) {
+                parcelSelect.innerHTML = `<option value="">All active parcels have already received customer feedback</option>`;
+            } else {
+                parcelSelect.innerHTML = `<option value="">Choose a parcel to review...</option>`;
+                eligible.forEach(p => {
+                    const opt = document.createElement("option");
+                    opt.value = p.parcel_id;
+                    opt.dataset.customer = `${p.customer_name} (Sender)`;
+                    opt.textContent = `${p.tracking_number} — ${p.parcel_type} (${p.customer_name})`;
+                    parcelSelect.appendChild(opt);
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Error loading eligible parcels for feedback:", e);
+    }
+
+    if (modal) {
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+    }
+}
+
+function closeFeedbackModal() {
+    const modal = document.getElementById("feedbackModal");
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+async function handleFeedbackFormSubmit(e) {
+    e.preventDefault();
+    const parcelSelect = document.getElementById("feedbackParcelSelect");
+    const ratingInput = document.getElementById("feedbackRatingInput");
+    const commentsInput = document.getElementById("feedbackCommentsInput");
+    const messageEl = document.getElementById("feedbackFormMessage");
+    const submitBtn = document.getElementById("submitFeedbackButton");
+
+    const payload = {
+        parcel_id: parseInt(parcelSelect.value, 10),
+        rating: parseInt(ratingInput.value, 10),
+        comments: commentsInput.value.trim()
+    };
+
+    try {
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Submitting...</span>`;
+        }
+
+        const response = await fetch("/api/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Failed to submit feedback.");
+        }
+
+        closeFeedbackModal();
+        showToast("Feedback Submitted", "Thank you! Customer review recorded successfully.");
+        loadFeedbackStats();
+        loadFeedbackTable();
+    } catch (error) {
+        if (messageEl) {
+            messageEl.textContent = error.message;
+            messageEl.className = "form-message error";
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-check"></i><span>Submit Feedback</span>`;
+        }
+    }
+}
+
+async function viewFeedbackDetails(feedbackId) {
+    const modal = document.getElementById("feedbackDetailsModal");
+    const titleEl = document.getElementById("detailFeedbackTitle");
+    const metaEl = document.getElementById("detailFeedbackMeta");
+    const ratingEl = document.getElementById("detailFeedbackRating");
+    const parcelEl = document.getElementById("detailFeedbackParcel");
+    const customerEl = document.getElementById("detailFeedbackCustomer");
+    const dateEl = document.getElementById("detailFeedbackDate");
+    const commentsEl = document.getElementById("detailFeedbackComments");
+
+    if (modal) {
+        modal.classList.add("show");
+        modal.setAttribute("aria-hidden", "false");
+    }
+
+    try {
+        if (titleEl) titleEl.textContent = "Loading review...";
+        const response = await fetch(`/api/feedback/${feedbackId}`);
+        if (!response.ok) throw new Error("Could not load feedback details");
+        const fb = await response.json();
+
+        if (titleEl) titleEl.textContent = `Feedback Review #REV-${fb.feedback_id}`;
+        if (metaEl) metaEl.textContent = `Tracking Number: ${fb.tracking_number} • Submitted on ${fb.feedback_date}`;
+
+        let starsHtml = "";
+        for (let i = 1; i <= 5; i++) {
+            if (i <= fb.rating) {
+                starsHtml += `<i class="fa-solid fa-star" style="color: #fbbf24; margin-right: 3px;"></i>`;
+            } else {
+                starsHtml += `<i class="fa-regular fa-star" style="color: #475569; margin-right: 3px;"></i>`;
+            }
+        }
+        if (ratingEl) ratingEl.innerHTML = `${starsHtml} <span style="font-size: 16px; font-weight: 700; margin-left: 6px;">${fb.rating} / 5</span>`;
+
+        if (parcelEl) parcelEl.innerHTML = `<strong>${escapeHtml(fb.tracking_number)}</strong><small style="display: block; color: #808ea3;">${escapeHtml(fb.parcel_type)} • Status: ${escapeHtml(fb.parcel_status)}</small>`;
+        if (customerEl) customerEl.innerHTML = `<div>${escapeHtml(fb.customer_name)}</div><small style="color: #808ea3;">${escapeHtml(fb.customer_email || 'No email')} • ${escapeHtml(fb.customer_phone)}</small>`;
+        if (dateEl) dateEl.textContent = fb.feedback_date;
+        if (commentsEl) commentsEl.textContent = fb.comments || "No written remarks were provided with this rating.";
+    } catch (e) {
+        console.error("Error loading feedback details:", e);
+        showToast("Error", "Could not load feedback review.");
+    }
+}
+
+function closeFeedbackDetailsModal() {
+    const modal = document.getElementById("feedbackDetailsModal");
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
     }
 }

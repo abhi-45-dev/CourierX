@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS Employee (
     email VARCHAR(100) UNIQUE,
     role VARCHAR(50) NOT NULL,
     branch_id INT NOT NULL,
+    status ENUM('Active', 'Inactive') DEFAULT 'Active',
     FOREIGN KEY (branch_id) REFERENCES Branch(branch_id)
 );
 

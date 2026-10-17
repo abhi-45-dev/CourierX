@@ -10,7 +10,10 @@ document.addEventListener("DOMContentLoaded", () => {
     setupFeedbackView();
     setupPaymentQrModal();
     setupAssignShipmentModal();
+    setupUpdateTrackingModal();
+    setupOperationalAlerts();
     loadDashboard();
+    loadAlerts();
     loadCustomers();
     loadBranches();
     setupParcelModal();
@@ -606,25 +609,31 @@ async function createParcel(event) {
         // SUCCESS
         // -------------------------------------------------
 
-        showFormMessage(
-            `Parcel created successfully! Tracking number: ${data.tracking_number}`,
-            "success"
-        );
-
-
-        showToast(
-            "Parcel Created",
-            `Tracking ID: ${data.tracking_number}`
-        );
-
+        if (data.auto_dispatched) {
+            showFormMessage(
+                `Parcel created & auto-dispatched with ${data.vehicle_number} (${data.employee_name})! Tracking ID: ${data.tracking_number}`,
+                "success"
+            );
+            showToast(
+                "Auto-Dispatched",
+                `${data.tracking_number} assigned to ${data.vehicle_number}`
+            );
+        } else {
+            showFormMessage(
+                `Parcel created successfully! Status: Awaiting vehicle/driver assignment. Tracking: ${data.tracking_number}`,
+                "success"
+            );
+            showToast(
+                "Parcel Created",
+                `Tracking ID: ${data.tracking_number} (Awaiting assignment)`
+            );
+        }
 
         form.reset();
 
-
         await loadDashboard();
-
+        await loadAlerts();
         await loadCustomers();
-
         await loadParcels();
 
 
@@ -1752,6 +1761,14 @@ function setupNavigation() {
         shipmentsAssignButton.addEventListener("click", event => {
             event.preventDefault();
             openAssignShipmentModal();
+        });
+    }
+
+    const updateTrackingButton = document.getElementById("updateTrackingButton");
+    if (updateTrackingButton) {
+        updateTrackingButton.addEventListener("click", event => {
+            event.preventDefault();
+            openUpdateTrackingModal();
         });
     }
 }
@@ -3008,10 +3025,17 @@ function renderShipmentsTable(shipments) {
                     </div>
                 </td>
                 <td>
-                    <div class="route-cell">
-                        <span class="route-point">${originText}</span>
-                        <i class="fa-solid fa-arrow-right route-arrow"></i>
-                        <span class="route-point">${destText}</span>
+                    <div class="shipment-route-cell">
+                        <div class="shipment-route-cities">
+                            <span class="route-city-tag origin-city">${escapeHtml(shipment.origin_city || shipment.origin_branch || "Origin")}</span>
+                            <i class="fa-solid fa-arrow-right-long shipment-route-arrow"></i>
+                            <span class="route-city-tag dest-city">${escapeHtml(shipment.destination_city || shipment.destination_branch || "Destination")}</span>
+                        </div>
+                        <div class="shipment-route-hubs">
+                            <span>${escapeHtml(shipment.origin_branch || "")}</span>
+                            <span class="hub-divider">→</span>
+                            <span>${escapeHtml(shipment.destination_branch || "")}</span>
+                        </div>
                     </div>
                 </td>
                 <td>
@@ -3778,6 +3802,8 @@ async function handleAssignShipmentSubmit(event) {
         loadVehicleStats();
         loadVehiclesTable();
         loadDashboard();
+        loadAlerts();
+        loadParcels();
 
     } catch (error) {
         console.error("Error creating shipment:", error);
@@ -3790,6 +3816,439 @@ async function handleAssignShipmentSubmit(event) {
             submitBtn.disabled = false;
             submitBtn.innerHTML = `<i class="fa-solid fa-truck-fast"></i><span>Assign &amp; Dispatch</span>`;
         }
+    }
+}
+
+
+// =========================================================
+// UPDATE TRACKING MODAL & TRANSIT EVENTS
+// =========================================================
+
+function setupUpdateTrackingModal() {
+    const modal = document.getElementById("updateTrackingModal");
+    const form = document.getElementById("updateTrackingForm");
+    const closeBtn = document.getElementById("closeUpdateTrackingModal");
+    const cancelBtn = document.getElementById("cancelUpdateTrackingModal");
+
+    if (closeBtn) closeBtn.addEventListener("click", closeUpdateTrackingModal);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeUpdateTrackingModal);
+
+    if (modal) {
+        modal.addEventListener("click", event => {
+            if (event.target === modal) {
+                closeUpdateTrackingModal();
+            }
+        });
+    }
+
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && modal && modal.classList.contains("show")) {
+            closeUpdateTrackingModal();
+        }
+    });
+
+    if (form) {
+        form.addEventListener("submit", handleUpdateTrackingSubmit);
+    }
+}
+
+async function openUpdateTrackingModal(preselectParcelId = null) {
+    const modal = document.getElementById("updateTrackingModal");
+    const form = document.getElementById("updateTrackingForm");
+    const messageEl = document.getElementById("updateTrackingMessage");
+    const parcelSelect = document.getElementById("trackingParcelSelect");
+    const statusBadge = document.getElementById("trackingCurrentStatusBadge");
+    const nextStatusSelect = document.getElementById("trackingNextStatusSelect");
+    const branchSelect = document.getElementById("trackingBranchSelect");
+    const employeeSelect = document.getElementById("trackingEmployeeSelect");
+    const checkpointInput = document.getElementById("trackingCheckpointInput");
+    const submitBtn = document.getElementById("submitUpdateTrackingButton");
+
+    if (!modal) return;
+    if (form) form.reset();
+    if (messageEl) {
+        messageEl.textContent = "";
+        messageEl.className = "form-message";
+    }
+    if (statusBadge) {
+        statusBadge.textContent = "Select a parcel...";
+        statusBadge.className = "";
+    }
+
+    if (parcelSelect) parcelSelect.innerHTML = `<option value="">Loading active parcels...</option>`;
+    if (branchSelect) branchSelect.innerHTML = `<option value="">Loading hubs...</option>`;
+    if (employeeSelect) employeeSelect.innerHTML = `<option value="">Loading employees...</option>`;
+
+    modal.classList.add("show");
+    modal.setAttribute("aria-hidden", "false");
+
+    try {
+        const [parcelsRes, branchesRes, employeesRes] = await Promise.all([
+            fetch("/api/tracking/active-parcels"),
+            fetch("/api/branches"),
+            fetch("/api/employees")
+        ]);
+
+        const parcels = parcelsRes.ok ? await parcelsRes.json() : [];
+        const branches = branchesRes.ok ? await branchesRes.json() : [];
+        const employees = employeesRes.ok ? await employeesRes.json() : [];
+
+        // 1. Populate Active Parcels
+        if (parcelSelect) {
+            if (parcels.length === 0) {
+                parcelSelect.innerHTML = `<option value="">No parcels currently in transit (all delivered)</option>`;
+                if (submitBtn) submitBtn.disabled = true;
+            } else {
+                if (submitBtn) submitBtn.disabled = false;
+                parcelSelect.innerHTML = `
+                    <option value="">-- Choose a parcel to update --</option>
+                    ${parcels.map(p => `
+                        <option value="${p.parcel_id}" 
+                                data-tracking="${p.tracking_number}" 
+                                data-status="${p.status}" 
+                                data-origin-branch="${p.origin_branch_id}" 
+                                data-dest-branch="${p.destination_branch_id}"
+                                data-emp="${p.employee_id || ''}">
+                            ${escapeHtml(p.tracking_number)} [${p.status}] — ${escapeHtml(p.customer_name)} (${escapeHtml(p.origin_city)} → ${escapeHtml(p.destination_city)})
+                        </option>
+                    `).join("")}
+                `;
+
+                parcelSelect.onchange = () => {
+                    const opt = parcelSelect.options[parcelSelect.selectedIndex];
+                    if (opt && opt.value) {
+                        const curStatus = opt.getAttribute("data-status") || "Pending";
+                        const originB = opt.getAttribute("data-origin-branch");
+                        const destB = opt.getAttribute("data-dest-branch");
+                        const empId = opt.getAttribute("data-emp");
+
+                        // Update current status badge
+                        if (statusBadge) {
+                            statusBadge.innerHTML = createStatusBadge(curStatus);
+                        }
+
+                        // Determine next status and preselect logical choice
+                        if (nextStatusSelect) {
+                            if (curStatus === "Pending") {
+                                nextStatusSelect.value = "In Transit";
+                            } else if (curStatus === "In Transit") {
+                                nextStatusSelect.value = "Out for Delivery";
+                            } else if (curStatus === "Out for Delivery") {
+                                nextStatusSelect.value = "Delivered";
+                            }
+                        }
+
+                        // Preselect branch
+                        if (branchSelect) {
+                            if (curStatus === "Out for Delivery" || (nextStatusSelect && nextStatusSelect.value === "Delivered")) {
+                                if (destB) branchSelect.value = destB;
+                            } else if (originB) {
+                                branchSelect.value = originB;
+                            }
+                        }
+
+                        // Preselect employee if known
+                        if (employeeSelect && empId) {
+                            employeeSelect.value = empId;
+                        }
+                    } else if (statusBadge) {
+                        statusBadge.textContent = "Select a parcel...";
+                    }
+                };
+
+                if (preselectParcelId) {
+                    parcelSelect.value = String(preselectParcelId);
+                    parcelSelect.dispatchEvent(new Event("change"));
+                }
+            }
+        }
+
+        // 2. Populate Branches
+        if (branchSelect) {
+            branchSelect.innerHTML = `
+                <option value="">-- Choose scanning hub facility --</option>
+                ${branches.map(b => `
+                    <option value="${b.branch_id}">${escapeHtml(b.branch_name)} — ${escapeHtml(b.city)}, ${escapeHtml(b.state)}</option>
+                `).join("")}
+            `;
+        }
+
+        // 3. Populate Employees
+        if (employeeSelect) {
+            employeeSelect.innerHTML = `
+                <option value="">-- Choose handling courier/officer --</option>
+                ${employees.map(e => `
+                    <option value="${e.employee_id}">${escapeHtml(e.name)} — ${escapeHtml(e.role || "Officer")} (${escapeHtml(e.branch_name || "")})</option>
+                `).join("")}
+            `;
+        }
+
+    } catch (error) {
+        console.error("Error loading update tracking modal options:", error);
+        if (messageEl) {
+            messageEl.textContent = "Failed to load options from the database.";
+            messageEl.className = "form-message error";
+        }
+    }
+}
+
+function closeUpdateTrackingModal() {
+    const modal = document.getElementById("updateTrackingModal");
+    if (modal) {
+        modal.classList.remove("show");
+        modal.setAttribute("aria-hidden", "true");
+    }
+}
+
+async function handleUpdateTrackingSubmit(event) {
+    event.preventDefault();
+
+    const messageEl = document.getElementById("updateTrackingMessage");
+    const parcelSelect = document.getElementById("trackingParcelSelect");
+    const nextStatusSelect = document.getElementById("trackingNextStatusSelect");
+    const branchSelect = document.getElementById("trackingBranchSelect");
+    const employeeSelect = document.getElementById("trackingEmployeeSelect");
+    const checkpointInput = document.getElementById("trackingCheckpointInput");
+    const submitBtn = document.getElementById("submitUpdateTrackingButton");
+
+    const parcelId = parcelSelect ? parcelSelect.value : "";
+    const status = nextStatusSelect ? nextStatusSelect.value : "";
+    const branchId = branchSelect ? branchSelect.value : "";
+    const employeeId = employeeSelect ? employeeSelect.value : "";
+    const remarks = checkpointInput ? checkpointInput.value.trim() : "";
+
+    if (!parcelId || !status || !branchId || !employeeId) {
+        if (messageEl) {
+            messageEl.textContent = "Please select a parcel, target status, hub facility, and handling officer.";
+            messageEl.className = "form-message error";
+        }
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Recording...</span>`;
+    }
+
+    try {
+        const response = await fetch("/api/tracking/events", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                parcel_id: parseInt(parcelId, 10),
+                status: status,
+                branch_id: parseInt(branchId, 10),
+                employee_id: parseInt(employeeId, 10),
+                remarks: remarks
+            })
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Failed to record tracking event");
+        }
+
+        closeUpdateTrackingModal();
+        showToast("Tracking Event Recorded", `Parcel #${result.tracking_number} updated to ${result.status}.`);
+
+        // Refresh tracking if currently viewing this parcel on the dashboard
+        const currentTrackInput = document.getElementById("trackingNumber");
+        if (currentTrackInput && currentTrackInput.value.trim() === result.tracking_number) {
+            trackParcel();
+        }
+
+        // Refresh all relevant data
+        loadDashboard();
+        loadAlerts();
+        loadParcels();
+        loadShipmentsTable();
+        loadShipmentStats();
+
+    } catch (error) {
+        console.error("Error submitting tracking event:", error);
+        if (messageEl) {
+            messageEl.textContent = error.message || "An unexpected error occurred.";
+            messageEl.className = "form-message error";
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-location-dot"></i><span>Record Event</span>`;
+        }
+    }
+}
+
+
+// =========================================================
+// OPERATIONAL ALERTS & NOTIFICATIONS
+// =========================================================
+
+function setupOperationalAlerts() {
+    const btn = document.getElementById("notificationButton");
+    const dropdown = document.getElementById("notificationDropdown");
+
+    if (btn && dropdown) {
+        btn.addEventListener("click", event => {
+            event.stopPropagation();
+            const isOpen = dropdown.classList.contains("show");
+            if (isOpen) {
+                dropdown.classList.remove("show");
+                dropdown.setAttribute("aria-hidden", "true");
+                btn.setAttribute("aria-expanded", "false");
+            } else {
+                dropdown.classList.add("show");
+                dropdown.setAttribute("aria-hidden", "false");
+                btn.setAttribute("aria-expanded", "true");
+                loadAlerts();
+            }
+        });
+
+        dropdown.addEventListener("click", event => {
+            event.stopPropagation();
+        });
+
+        document.addEventListener("click", () => {
+            if (dropdown.classList.contains("show")) {
+                dropdown.classList.remove("show");
+                dropdown.setAttribute("aria-hidden", "true");
+                btn.setAttribute("aria-expanded", "false");
+            }
+        });
+    }
+}
+
+async function loadAlerts() {
+    const badge = document.getElementById("notificationBadge");
+    const headerBadge = document.getElementById("notificationHeaderBadge");
+    const listEl = document.getElementById("notificationList");
+
+    try {
+        const response = await fetch("/api/alerts");
+        if (!response.ok) return;
+        const data = await response.json();
+
+        const count = data.total_alerts || 0;
+        if (badge) {
+            badge.textContent = count;
+            badge.style.display = count > 0 ? "inline-block" : "none";
+        }
+        if (headerBadge) {
+            headerBadge.textContent = `${count} active`;
+            headerBadge.className = `status-badge ${count > 0 ? 'status-out' : 'status-delivered'}`;
+        }
+
+        if (!listEl) return;
+
+        if (count === 0) {
+            listEl.innerHTML = `<div class="empty-state" style="padding: 24px; font-size: 13px;"><i class="fa-solid fa-circle-check" style="color: #4ade80; margin-right: 6px;"></i>All operational queues are clear!</div>`;
+            return;
+        }
+
+        let html = "";
+
+        // 1. Parcels awaiting assignment
+        if (data.unassigned_parcels && data.unassigned_parcels.length > 0) {
+            data.unassigned_parcels.forEach(p => {
+                html += `
+                    <div class="alert-item">
+                        <div class="alert-icon amber">
+                            <i class="fa-solid fa-truck"></i>
+                        </div>
+                        <div class="alert-body">
+                            <div class="alert-body-title">
+                                <span>Awaiting Assignment</span>
+                                <small style="color: #808ea3; font-weight: 500;">${escapeHtml(p.parcel_type)}</small>
+                            </div>
+                            <div class="alert-body-desc">
+                                <strong>#${escapeHtml(p.tracking_number)}</strong> (${p.weight} kg) • ${escapeHtml(p.origin_city)} → ${escapeHtml(p.destination_city)}
+                            </div>
+                            <button class="alert-action-btn" onclick="openAssignShipmentModal()">
+                                <i class="fa-solid fa-truck-fast"></i> Assign Shipment
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // 2. Pending / Unpaid Payments
+        if (data.pending_payments && data.pending_payments.length > 0) {
+            data.pending_payments.forEach(py => {
+                html += `
+                    <div class="alert-item">
+                        <div class="alert-icon red">
+                            <i class="fa-solid fa-credit-card"></i>
+                        </div>
+                        <div class="alert-body">
+                            <div class="alert-body-title">
+                                <span>Pending Payment</span>
+                                <strong style="color: #f87171;">₹${Number(py.amount).toFixed(2)}</strong>
+                            </div>
+                            <div class="alert-body-desc">
+                                Invoice #${py.payment_id} for ${escapeHtml(py.customer_name)} (Parcel #${escapeHtml(py.tracking_number)})
+                            </div>
+                            <button class="alert-action-btn" onclick="switchToView('payments')">
+                                <i class="fa-solid fa-receipt"></i> Settle Invoice
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // 3. Unbilled Parcels
+        if (data.unbilled_parcels && data.unbilled_parcels.length > 0) {
+            data.unbilled_parcels.forEach(ub => {
+                html += `
+                    <div class="alert-item">
+                        <div class="alert-icon blue">
+                            <i class="fa-solid fa-file-invoice"></i>
+                        </div>
+                        <div class="alert-body">
+                            <div class="alert-body-title">
+                                <span>Unbilled Parcel</span>
+                                <strong style="color: #60a5fa;">₹${Number(ub.shipping_cost).toFixed(2)}</strong>
+                            </div>
+                            <div class="alert-body-desc">
+                                #${escapeHtml(ub.tracking_number)} • Sender: ${escapeHtml(ub.customer_name)}
+                            </div>
+                            <button class="alert-action-btn" onclick="openCreatePaymentModal()">
+                                <i class="fa-solid fa-plus"></i> Generate Invoice
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // 4. Low customer ratings
+        if (data.low_ratings && data.low_ratings.length > 0) {
+            data.low_ratings.forEach(fb => {
+                html += `
+                    <div class="alert-item">
+                        <div class="alert-icon red">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <div class="alert-body">
+                            <div class="alert-body-title">
+                                <span>Low Rating: ${fb.rating}/5</span>
+                                <small style="color: #808ea3;">#${escapeHtml(fb.tracking_number)}</small>
+                            </div>
+                            <div class="alert-body-desc">
+                                "${escapeHtml(fb.comments || 'No comment provided')}" — ${escapeHtml(fb.customer_name)}
+                            </div>
+                            <button class="alert-action-btn" onclick="switchToView('feedback')">
+                                <i class="fa-solid fa-eye"></i> View Feedback
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        listEl.innerHTML = html;
+    } catch (err) {
+        console.error("Error loading operational alerts:", err);
     }
 }
 
@@ -4911,6 +5370,20 @@ function setupPaymentsView() {
             }
         });
     }
+
+    const paymentMethodSelect = document.getElementById("paymentMethodSelect");
+    if (paymentMethodSelect) {
+        paymentMethodSelect.addEventListener("change", () => {
+            const upiSec = document.getElementById("paymentUpiSection");
+            const cardSec = document.getElementById("paymentCardSection");
+            const netBankSec = document.getElementById("paymentNetBankingSection");
+            const val = paymentMethodSelect.value;
+
+            if (upiSec) upiSec.style.display = val === "UPI" ? "block" : "none";
+            if (cardSec) cardSec.style.display = (val === "Credit Card" || val === "Debit Card") ? "block" : "none";
+            if (netBankSec) netBankSec.style.display = val === "Net Banking" ? "block" : "none";
+        });
+    }
 }
 
 async function loadPaymentStats() {
@@ -5047,6 +5520,12 @@ async function openCreatePaymentModal() {
         console.error("Error loading unpaid parcels:", e);
     }
 
+    const paymentMethodSelect = document.getElementById("paymentMethodSelect");
+    if (paymentMethodSelect) {
+        paymentMethodSelect.value = "UPI";
+        paymentMethodSelect.dispatchEvent(new Event("change"));
+    }
+
     if (modal) {
         modal.classList.add("show");
         modal.setAttribute("aria-hidden", "false");
@@ -5098,6 +5577,8 @@ async function handlePaymentFormSubmit(e) {
         showToast("Payment Recorded", `Invoice #PAY-${result.payment_id} recorded in MySQL.`);
         loadPaymentStats();
         loadPaymentsTable();
+        loadDashboard();
+        loadAlerts();
     } catch (error) {
         if (messageEl) {
             messageEl.textContent = error.message;
@@ -5592,6 +6073,8 @@ async function handleFeedbackFormSubmit(e) {
         showToast("Feedback Submitted", "Thank you! Customer review recorded successfully.");
         loadFeedbackStats();
         loadFeedbackTable();
+        loadDashboard();
+        loadAlerts();
     } catch (error) {
         if (messageEl) {
             messageEl.textContent = error.message;

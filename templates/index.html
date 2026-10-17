@@ -406,9 +406,25 @@
 
                 <div class="topbar-right">
 
-                    <button class="icon-button">
-                        <i class="fa-regular fa-bell"></i>
-                    </button>
+                    <div class="notification-wrapper">
+                        <button id="notificationButton" class="icon-button" type="button" title="Operational Alerts" aria-expanded="false">
+                            <i class="fa-regular fa-bell"></i>
+                            <span id="notificationBadge" class="notification-badge" style="display: none;">0</span>
+                        </button>
+
+                        <div id="notificationDropdown" class="notification-dropdown" aria-hidden="true">
+                            <div class="notification-header">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fa-solid fa-bell" style="color: #60a5fa;"></i>
+                                    <strong>Operational Alerts</strong>
+                                </div>
+                                <span id="notificationHeaderBadge" class="status-badge status-out" style="font-size: 11px;">0 active</span>
+                            </div>
+                            <div id="notificationList" class="notification-list">
+                                <div class="empty-state" style="padding: 24px; font-size: 13px;">No critical alerts</div>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="admin-profile">
 
@@ -512,9 +528,14 @@
                         </div>
 
 
-                        <div id="trackingStatusDisplay" class="tracking-status-large">
-                            <i class="fa-solid fa-circle"></i>
-                            <span>Pending</span>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div id="trackingStatusDisplay" class="tracking-status-large">
+                                <i class="fa-solid fa-circle"></i>
+                                <span>Pending</span>
+                            </div>
+                            <button type="button" id="trackingPanelUpdateBtn" class="ghost-button" style="padding: 8px 12px; border: 1px solid var(--border-main); border-radius: 8px;" onclick="openUpdateTrackingModal()" title="Record tracking update for this parcel">
+                                <i class="fa-solid fa-plus"></i> Add Event
+                            </button>
                         </div>
 
                     </div>
@@ -3062,6 +3083,85 @@
 
 
     <!-- =========================================================
+         UPDATE TRACKING MODAL
+    ========================================================== -->
+    <div id="updateTrackingModal" class="modal-overlay" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div>
+                    <span class="eyebrow">TRANSIT SYNCHRONIZATION</span>
+                    <h2>Update Tracking Event</h2>
+                    <p>Record status milestones, distribution hub scans, and final delivery completion.</p>
+                </div>
+                <button id="closeUpdateTrackingModal" class="modal-close" type="button">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="updateTrackingForm" class="modal-form">
+                <div class="form-section">
+                    <div class="form-group full-width">
+                        <label for="trackingParcelSelect">Select Active Parcel <span style="color: #f87171;">*</span></label>
+                        <select id="trackingParcelSelect" required>
+                            <option value="">Choose a parcel in transit or pending...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Current Status</label>
+                            <div id="trackingCurrentStatusBadge" style="padding: 10px 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; font-weight: 700; color: #94a3b8; font-size: 13px;">
+                                Select a parcel...
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="trackingNextStatusSelect">New Status <span style="color: #f87171;">*</span></label>
+                            <select id="trackingNextStatusSelect" required>
+                                <option value="In Transit">In Transit</option>
+                                <option value="Out for Delivery">Out for Delivery</option>
+                                <option value="Delivered">Delivered</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="trackingBranchSelect">Distribution Hub / Branch <span style="color: #f87171;">*</span></label>
+                            <select id="trackingBranchSelect" required>
+                                <option value="">Select scanning hub...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="trackingEmployeeSelect">Handling Courier / Employee <span style="color: #f87171;">*</span></label>
+                            <select id="trackingEmployeeSelect" required>
+                                <option value="">Select handling officer...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="trackingCheckpointInput">Location / Checkpoint Note</label>
+                        <input type="text" id="trackingCheckpointInput" placeholder="e.g. Regional Hub Scanning, Package sorted for final dispatch">
+                    </div>
+                </div>
+
+                <div id="updateTrackingMessage" class="form-message"></div>
+
+                <div class="modal-actions">
+                    <button type="button" id="cancelUpdateTrackingModal" class="secondary-button">Cancel</button>
+                    <button type="submit" id="submitUpdateTrackingButton" class="primary-button">
+                        <i class="fa-solid fa-location-dot"></i>
+                        <span>Record Event</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- =========================================================
      CUSTOMER DETAILS MODAL
 ========================================================== -->
 
@@ -3482,11 +3582,11 @@
                         <div class="form-group">
                             <label for="paymentMethodSelect">Payment Method <span style="color: #f87171;">*</span></label>
                             <select id="paymentMethodSelect" required>
-                                <option value="UPI">UPI</option>
-                                <option value="Credit Card">Credit Card</option>
-                                <option value="Debit Card">Debit Card</option>
-                                <option value="Net Banking">Net Banking</option>
-                                <option value="Cash">Cash</option>
+                                <option value="UPI">UPI / Digital QR Code</option>
+                                <option value="Credit Card">Credit Card (Demo Gateway)</option>
+                                <option value="Debit Card">Debit Card (Demo Gateway)</option>
+                                <option value="Net Banking">Net Banking (Demo Gateway)</option>
+                                <option value="Cash">Cash on Delivery / Counter</option>
                             </select>
                         </div>
 
@@ -3496,6 +3596,61 @@
                                 <option value="Paid">Paid (Settled)</option>
                                 <option value="Unpaid">Unpaid (Pending)</option>
                                 <option value="Refunded">Refunded</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- UPI / QR CODE INTERACTIVE SECTION -->
+                    <div id="paymentUpiSection" class="payment-mode-container">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #60a5fa;"><i class="fa-solid fa-qrcode" style="margin-right: 6px;"></i>UPI / QR Payment Reference</span>
+                            <span class="qr-demo-badge" style="font-size: 10px; padding: 2px 8px; border-radius: 999px; background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">Instant UPI Verification</span>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="paymentUpiIdInput" style="font-size: 11px;">Payer UPI ID (VPA)</label>
+                            <input type="text" id="paymentUpiIdInput" placeholder="e.g. sender@okaxis or customer@upi" value="customer@upi">
+                        </div>
+                    </div>
+
+                    <!-- CARD INTERACTIVE SECTION -->
+                    <div id="paymentCardSection" class="payment-mode-container" style="display: none;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #a78bfa;"><i class="fa-solid fa-credit-card" style="margin-right: 6px;"></i>Demo Card Payment Intent</span>
+                            <span style="font-size: 10px; padding: 2px 8px; border-radius: 999px; background: rgba(167, 139, 250, 0.15); color: #c4b5fd; border: 1px solid rgba(167, 139, 250, 0.3);">Simulation Sandbox</span>
+                        </div>
+                        <div class="demo-card-box">
+                            <div class="form-group" style="margin-bottom: 10px;">
+                                <label style="font-size: 11px; color: #94a3b8;">Card Number</label>
+                                <input type="text" id="demoCardNumber" placeholder="4532 •••• •••• 8892" maxlength="19" value="4532 8821 9023 8892" style="font-family: monospace; letter-spacing: 1px;">
+                            </div>
+                            <div class="form-grid" style="margin-bottom: 0;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 11px; color: #94a3b8;">Expiry MM/YY</label>
+                                    <input type="text" id="demoCardExpiry" placeholder="12/28" maxlength="5" value="12/28" style="font-family: monospace;">
+                                </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 11px; color: #94a3b8;">CVV / CVC</label>
+                                    <input type="password" id="demoCardCvv" placeholder="•••" maxlength="4" value="882" style="font-family: monospace;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NET BANKING INTERACTIVE SECTION -->
+                    <div id="paymentNetBankingSection" class="payment-mode-container" style="display: none;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #34d399;"><i class="fa-solid fa-building-columns" style="margin-right: 6px;"></i>Net Banking Gateway</span>
+                            <span style="font-size: 10px; padding: 2px 8px; border-radius: 999px; background: rgba(52, 211, 153, 0.15); color: #6ee7b7; border: 1px solid rgba(52, 211, 153, 0.3);">Direct Bank Transfer</span>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label for="paymentBankSelect" style="font-size: 11px;">Select Authorized Bank</label>
+                            <select id="paymentBankSelect">
+                                <option value="HDFC">HDFC Bank — Direct NetBanking</option>
+                                <option value="SBI">State Bank of India (SBI)</option>
+                                <option value="ICICI">ICICI Bank Internet Banking</option>
+                                <option value="AXIS">Axis Bank Corporate / Retail</option>
+                                <option value="KOTAK">Kotak Mahindra Bank</option>
+                                <option value="PNB">Punjab National Bank</option>
                             </select>
                         </div>
                     </div>

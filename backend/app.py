@@ -3,7 +3,7 @@ import sys
 import secrets
 import string
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from flask import Flask, jsonify, render_template, request
 
@@ -840,7 +840,7 @@ def dashboard():
         cursor.execute("""
             SELECT COUNT(*) AS total
             FROM Parcel
-            WHERE status = 'In Transit'
+            WHERE status IN ('In Transit', 'Out for Delivery')
         """)
 
         in_transit = cursor.fetchone()["total"]
@@ -904,6 +904,111 @@ def dashboard():
                 recent_parcels
         })
 
+    finally:
+        cursor.close()
+        db.close()
+
+
+# =========================================================
+# OPERATIONAL ALERTS API
+# =========================================================
+
+@app.route("/api/alerts", methods=["GET"])
+def get_operational_alerts():
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        # 1. Parcels awaiting shipment assignment
+        cursor.execute("""
+            SELECT
+                p.parcel_id,
+                p.tracking_number,
+                DATE_FORMAT(p.booking_date, '%Y-%m-%d %H:%i') AS booking_date,
+                p.weight,
+                p.parcel_type,
+                p.shipping_cost,
+                c.name AS customer_name,
+                ob.city AS origin_city,
+                db_branch.city AS destination_city
+            FROM Parcel p
+            JOIN Customer c ON p.sender_id = c.customer_id
+            JOIN Branch ob ON p.origin_branch_id = ob.branch_id
+            JOIN Branch db_branch ON p.destination_branch_id = db_branch.branch_id
+            LEFT JOIN Shipment s ON p.parcel_id = s.parcel_id
+            WHERE s.shipment_id IS NULL AND p.status = 'Pending'
+            ORDER BY p.parcel_id DESC
+            LIMIT 5
+        """)
+        unassigned_parcels = cursor.fetchall()
+        for p in unassigned_parcels:
+            p["shipping_cost"] = float(p["shipping_cost"])
+            p["weight"] = float(p["weight"])
+
+        # 2. Pending / Unpaid Payments
+        cursor.execute("""
+            SELECT
+                py.payment_id,
+                py.amount,
+                py.payment_method,
+                p.tracking_number,
+                c.name AS customer_name
+            FROM Payment py
+            JOIN Parcel p ON py.parcel_id = p.parcel_id
+            JOIN Customer c ON py.customer_id = c.customer_id
+            WHERE py.payment_status = 'Unpaid'
+            ORDER BY py.payment_id DESC
+            LIMIT 5
+        """)
+        pending_payments = cursor.fetchall()
+        for py in pending_payments:
+            py["amount"] = float(py["amount"])
+
+        # 3. Parcels without any invoice/payment record
+        cursor.execute("""
+            SELECT
+                p.parcel_id,
+                p.tracking_number,
+                p.shipping_cost,
+                c.name AS customer_name
+            FROM Parcel p
+            JOIN Customer c ON p.sender_id = c.customer_id
+            LEFT JOIN Payment py ON p.parcel_id = py.parcel_id
+            WHERE py.payment_id IS NULL
+            ORDER BY p.parcel_id DESC
+            LIMIT 5
+        """)
+        unbilled_parcels = cursor.fetchall()
+        for ub in unbilled_parcels:
+            ub["shipping_cost"] = float(ub["shipping_cost"])
+
+        # 4. Low customer ratings (rating <= 2)
+        cursor.execute("""
+            SELECT
+                fb.feedback_id,
+                fb.rating,
+                fb.comments,
+                DATE_FORMAT(fb.feedback_date, '%Y-%m-%d %H:%i') AS feedback_date,
+                p.tracking_number,
+                c.name AS customer_name
+            FROM Feedback fb
+            JOIN Parcel p ON fb.parcel_id = p.parcel_id
+            JOIN Customer c ON fb.customer_id = c.customer_id
+            WHERE fb.rating <= 2
+            ORDER BY fb.feedback_id DESC
+            LIMIT 5
+        """)
+        low_ratings = cursor.fetchall()
+
+        total_alerts = len(unassigned_parcels) + len(pending_payments) + len(unbilled_parcels) + len(low_ratings)
+
+        return jsonify({
+            "total_alerts": total_alerts,
+            "unassigned_parcels": unassigned_parcels,
+            "pending_payments": pending_payments,
+            "unbilled_parcels": unbilled_parcels,
+            "low_ratings": low_ratings
+        })
     finally:
         cursor.close()
         db.close()
@@ -1364,81 +1469,58 @@ def create_parcel():
     # =====================================================
 
     try:
+        origin_branch_id = int(data["origin_branch_id"])
+        destination_branch_id = int(data["destination_branch_id"])
+        weight = float(data["weight"])
 
-        origin_branch_id = int(
-            data["origin_branch_id"]
-        )
-
-
-        destination_branch_id = int(
-            data["destination_branch_id"]
-        )
-
-
-        weight = float(
-            data["weight"]
-        )
-
-
-        shipping_cost = float(
-            data["shipping_cost"]
-        )
+        raw_cost = data.get("shipping_cost")
+        if raw_cost is not None and str(raw_cost).strip() != "":
+            shipping_cost = float(raw_cost)
+        else:
+            shipping_cost = 0.0
 
     except (
         KeyError,
         TypeError,
         ValueError
     ):
-
         return jsonify({
-            "error":
-                "Invalid parcel information"
+            "error": "Invalid parcel information"
         }), 400
 
-
-    parcel_type = (
-        data.get(
-            "parcel_type",
-            ""
-        ).strip()
-    )
-
+    parcel_type = data.get("parcel_type", "").strip()
 
     if weight <= 0:
-
         return jsonify({
-            "error":
-                "Weight must be greater than 0"
+            "error": "Weight must be greater than 0"
         }), 400
-
 
     if shipping_cost < 0:
-
         return jsonify({
-            "error":
-                "Shipping cost cannot be negative"
+            "error": "Shipping cost cannot be negative"
         }), 400
-
 
     if not parcel_type:
-
         return jsonify({
-            "error":
-                "Parcel type is required"
+            "error": "Parcel type is required"
         }), 400
 
+    # Auto-calculate shipping cost if omitted or zero
+    if shipping_cost <= 0:
+        type_surcharges = {
+            "Express": 100.0,
+            "Fragile": 75.0,
+            "Document": 25.0,
+            "Standard": 0.0,
+            "Heavy Cargo": 150.0
+        }
+        surcharge = type_surcharges.get(parcel_type, 30.0)
+        shipping_cost = round(50.0 + (weight * 40.0) + surcharge, 2)
 
-    if (
-        origin_branch_id ==
-        destination_branch_id
-    ):
-
+    if origin_branch_id == destination_branch_id:
         return jsonify({
-            "error":
-                "Origin and destination branches "
-                "must be different"
+            "error": "Origin and destination branches must be different"
         }), 400
-
 
     # =====================================================
     # DATABASE
@@ -1446,76 +1528,52 @@ def create_parcel():
 
     db = get_db_connection()
 
-
     try:
-
-        cursor = db.cursor(
-            dictionary=True
-        )
-
+        cursor = db.cursor(dictionary=True)
 
         # -------------------------------------------------
         # CHECK ORIGIN BRANCH
         # -------------------------------------------------
-
         cursor.execute("""
-            SELECT branch_id, status
+            SELECT branch_id, branch_name, city, status
             FROM Branch
             WHERE branch_id = %s
-        """, (
-            origin_branch_id,
-        ))
-
+        """, (origin_branch_id,))
         origin_branch = cursor.fetchone()
 
         if origin_branch is None:
-
             return jsonify({
-                "error":
-                    "Origin branch does not exist"
+                "error": "Origin branch does not exist"
             }), 400
 
         if origin_branch.get("status") == "Inactive":
-
             return jsonify({
-                "error":
-                    "Selected origin branch is inactive and cannot accept new parcels"
+                "error": "Selected origin branch is inactive and cannot accept new parcels"
             }), 400
-
 
         # -------------------------------------------------
         # CHECK DESTINATION BRANCH
         # -------------------------------------------------
-
         cursor.execute("""
-            SELECT branch_id, status
+            SELECT branch_id, branch_name, city, status
             FROM Branch
             WHERE branch_id = %s
-        """, (
-            destination_branch_id,
-        ))
-
+        """, (destination_branch_id,))
         dest_branch = cursor.fetchone()
 
         if dest_branch is None:
-
             return jsonify({
-                "error":
-                    "Destination branch does not exist"
+                "error": "Destination branch does not exist"
             }), 400
 
         if dest_branch.get("status") == "Inactive":
-
             return jsonify({
-                "error":
-                    "Selected destination branch is inactive and cannot accept new parcels"
+                "error": "Selected destination branch is inactive and cannot accept new parcels"
             }), 400
-
 
         # -------------------------------------------------
         # FIND / CREATE SENDER
         # -------------------------------------------------
-
         sender_id = get_or_create_customer(
             cursor,
             sender_name,
@@ -1524,11 +1582,9 @@ def create_parcel():
             sender_address
         )
 
-
         # -------------------------------------------------
         # FIND / CREATE RECEIVER
         # -------------------------------------------------
-
         receiver_id = get_or_create_customer(
             cursor,
             receiver_name,
@@ -1537,117 +1593,224 @@ def create_parcel():
             receiver_address
         )
 
-
         # -------------------------------------------------
         # GENERATE TRACKING NUMBER
         # -------------------------------------------------
-
-        tracking_number = (
-            generate_tracking_number()
-        )
-
-
+        tracking_number = generate_tracking_number()
         while True:
-
             cursor.execute("""
                 SELECT parcel_id
                 FROM Parcel
                 WHERE tracking_number = %s
-            """, (
-                tracking_number,
-            ))
-
-
+            """, (tracking_number,))
             if cursor.fetchone() is None:
                 break
-
-
-            tracking_number = (
-                generate_tracking_number()
-            )
-
+            tracking_number = generate_tracking_number()
 
         # -------------------------------------------------
         # INSERT PARCEL
         # -------------------------------------------------
-
         cursor.execute("""
             INSERT INTO Parcel (
-
                 tracking_number,
-
                 sender_id,
                 receiver_id,
-
                 origin_branch_id,
                 destination_branch_id,
-
                 weight,
                 parcel_type,
                 shipping_cost,
-
                 status
-
             )
-
-            VALUES (
-
-                %s,
-
-                %s,
-                %s,
-
-                %s,
-                %s,
-
-                %s,
-                %s,
-                %s,
-
-                'Pending'
-
-            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Pending')
         """, (
-
             tracking_number,
-
             sender_id,
             receiver_id,
-
             origin_branch_id,
             destination_branch_id,
-
             weight,
             parcel_type,
             shipping_cost
         ))
 
+        parcel_id = cursor.lastrowid
+
+        # -------------------------------------------------
+        # AUTOMATED VEHICLE & EMPLOYEE DISPATCH
+        # -------------------------------------------------
+        # 1. Look for eligible vehicle (capacity >= weight, origin hub or same city, not in active shipment)
+        cursor.execute("""
+            SELECT v.vehicle_id, v.vehicle_number, v.vehicle_type, v.capacity
+            FROM Vehicle v
+            WHERE v.branch_id = %s
+              AND v.capacity >= %s
+              AND v.vehicle_id NOT IN (
+                  SELECT s.vehicle_id
+                  FROM Shipment s
+                  JOIN Parcel p ON s.parcel_id = p.parcel_id
+                  WHERE p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+              )
+            ORDER BY v.capacity ASC
+            LIMIT 1
+        """, (origin_branch_id, weight))
+        assigned_vehicle = cursor.fetchone()
+
+        if not assigned_vehicle:
+            # Fallback search 1: vehicle stationed within the same city
+            cursor.execute("""
+                SELECT v.vehicle_id, v.vehicle_number, v.vehicle_type, v.capacity
+                FROM Vehicle v
+                JOIN Branch vb ON v.branch_id = vb.branch_id
+                JOIN Branch ob ON ob.branch_id = %s
+                WHERE vb.city = ob.city
+                  AND v.capacity >= %s
+                  AND v.vehicle_id NOT IN (
+                      SELECT s.vehicle_id
+                      FROM Shipment s
+                      JOIN Parcel p ON s.parcel_id = p.parcel_id
+                      WHERE p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+                  )
+                ORDER BY v.capacity ASC
+                LIMIT 1
+            """, (origin_branch_id, weight))
+            assigned_vehicle = cursor.fetchone()
+
+        if not assigned_vehicle:
+            # Fallback search 2: any available fleet vehicle across active branches
+            cursor.execute("""
+                SELECT v.vehicle_id, v.vehicle_number, v.vehicle_type, v.capacity
+                FROM Vehicle v
+                JOIN Branch vb ON v.branch_id = vb.branch_id
+                WHERE vb.status = 'Active'
+                  AND v.capacity >= %s
+                  AND v.vehicle_id NOT IN (
+                      SELECT s.vehicle_id
+                      FROM Shipment s
+                      JOIN Parcel p ON s.parcel_id = p.parcel_id
+                      WHERE p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+                  )
+                ORDER BY v.capacity ASC
+                LIMIT 1
+            """, (weight,))
+            assigned_vehicle = cursor.fetchone()
+
+        # 2. Look for eligible employee (Active, origin hub or same city, not in active shipment)
+        cursor.execute("""
+            SELECT e.employee_id, e.name, e.role
+            FROM Employee e
+            WHERE e.branch_id = %s
+              AND e.status = 'Active'
+              AND e.employee_id NOT IN (
+                  SELECT s.employee_id
+                  FROM Shipment s
+                  JOIN Parcel p ON s.parcel_id = p.parcel_id
+                  WHERE p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+              )
+            ORDER BY (CASE WHEN e.role LIKE '%%Driver%%' OR e.role LIKE '%%Courier%%' OR e.role LIKE '%%Delivery%%' THEN 0 ELSE 1 END), e.employee_id ASC
+            LIMIT 1
+        """, (origin_branch_id,))
+        assigned_employee = cursor.fetchone()
+
+        if not assigned_employee:
+            # Fallback search 1: active employee within the same city
+            cursor.execute("""
+                SELECT e.employee_id, e.name, e.role
+                FROM Employee e
+                JOIN Branch eb ON e.branch_id = eb.branch_id
+                JOIN Branch ob ON ob.branch_id = %s
+                WHERE eb.city = ob.city
+                  AND e.status = 'Active'
+                  AND e.employee_id NOT IN (
+                      SELECT s.employee_id
+                      FROM Shipment s
+                      JOIN Parcel p ON s.parcel_id = p.parcel_id
+                      WHERE p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+                  )
+                ORDER BY (CASE WHEN e.role LIKE '%%Driver%%' OR e.role LIKE '%%Courier%%' OR e.role LIKE '%%Delivery%%' THEN 0 ELSE 1 END), e.employee_id ASC
+                LIMIT 1
+            """, (origin_branch_id,))
+            assigned_employee = cursor.fetchone()
+
+        if not assigned_employee:
+            # Fallback search 2: any available active delivery officer across active branches
+            cursor.execute("""
+                SELECT e.employee_id, e.name, e.role
+                FROM Employee e
+                JOIN Branch eb ON e.branch_id = eb.branch_id
+                WHERE eb.status = 'Active'
+                  AND e.status = 'Active'
+                  AND e.employee_id NOT IN (
+                      SELECT s.employee_id
+                      FROM Shipment s
+                      JOIN Parcel p ON s.parcel_id = p.parcel_id
+                      WHERE p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+                  )
+                ORDER BY (CASE WHEN e.role LIKE '%%Driver%%' OR e.role LIKE '%%Courier%%' OR e.role LIKE '%%Delivery%%' THEN 0 ELSE 1 END), e.employee_id ASC
+                LIMIT 1
+            """)
+            assigned_employee = cursor.fetchone()
+
+        auto_dispatched = False
+        final_status = "Pending"
+        vehicle_num = None
+        emp_name = None
+
+        if assigned_vehicle and assigned_employee:
+            # Create Shipment
+            cursor.execute("""
+                INSERT INTO Shipment (parcel_id, vehicle_id, employee_id, shipment_date)
+                VALUES (%s, %s, %s, NOW())
+            """, (parcel_id, assigned_vehicle["vehicle_id"], assigned_employee["employee_id"]))
+
+            # Update Parcel status to 'In Transit'
+            cursor.execute("UPDATE Parcel SET status = 'In Transit' WHERE parcel_id = %s", (parcel_id,))
+
+            # Initial In Transit Tracking Update
+            loc_str = f"{origin_branch['branch_name']}, {origin_branch['city']} — Dispatched via {assigned_vehicle['vehicle_number']} ({assigned_employee['name']})"
+            cursor.execute("""
+                INSERT INTO Tracking_Update (parcel_id, branch_id, employee_id, status, location, update_time)
+                VALUES (%s, %s, %s, 'In Transit', %s, NOW())
+            """, (parcel_id, origin_branch_id, assigned_employee["employee_id"], loc_str))
+
+            auto_dispatched = True
+            final_status = "In Transit"
+            vehicle_num = assigned_vehicle["vehicle_number"]
+            emp_name = assigned_employee["name"]
+
+        else:
+            # Fallback: Awaiting vehicle and employee assignment
+            # Assign any active employee at origin branch (or company) as the registration clerk
+            cursor.execute("SELECT employee_id FROM Employee WHERE branch_id = %s AND status = 'Active' LIMIT 1", (origin_branch_id,))
+            clerk = cursor.fetchone()
+            if not clerk:
+                cursor.execute("SELECT employee_id FROM Employee WHERE status = 'Active' LIMIT 1")
+                clerk = cursor.fetchone()
+            clerk_id = clerk["employee_id"] if clerk else 1
+
+            loc_str = f"{origin_branch['branch_name']}, {origin_branch['city']} — Registered (Awaiting vehicle/driver assignment)"
+            cursor.execute("""
+                INSERT INTO Tracking_Update (parcel_id, branch_id, employee_id, status, location, update_time)
+                VALUES (%s, %s, %s, 'Pending', %s, NOW())
+            """, (parcel_id, origin_branch_id, clerk_id, loc_str))
 
         db.commit()
 
-
-        parcel_id = (
-            cursor.lastrowid
-        )
-
-
         return jsonify({
-
-            "message":
-                "Parcel created successfully",
-
-            "parcel_id":
-                parcel_id,
-
-            "tracking_number":
-                tracking_number,
-
-            "sender_id":
-                sender_id,
-
-            "receiver_id":
-                receiver_id
-
+            "message": (
+                f"Parcel created and auto-dispatched with {vehicle_num} ({emp_name})"
+                if auto_dispatched
+                else "Parcel created successfully. Awaiting vehicle/driver assignment."
+            ),
+            "auto_dispatched": auto_dispatched,
+            "parcel_id": parcel_id,
+            "tracking_number": tracking_number,
+            "status": final_status,
+            "shipping_cost": shipping_cost,
+            "sender_id": sender_id,
+            "receiver_id": receiver_id,
+            "vehicle_number": vehicle_num,
+            "employee_name": emp_name
         }), 201
 
 
@@ -1859,6 +2022,196 @@ def track_parcel(
         cursor.close()
         db.close()
 
+
+# =========================================================
+# TRACKING EVENTS MANAGEMENT API
+# =========================================================
+
+@app.route("/api/tracking/events", methods=["POST"])
+def add_tracking_event():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body is required"}), 400
+
+    tracking_number = (data.get("tracking_number") or "").strip()
+    parcel_id = data.get("parcel_id")
+    new_status = (data.get("status") or "").strip()
+    branch_id = data.get("branch_id")
+    employee_id = data.get("employee_id")
+    location = (data.get("location") or "").strip()
+    remarks = (data.get("remarks") or "").strip()
+
+    valid_statuses = ["Pending", "In Transit", "Out for Delivery", "Delivered"]
+    if new_status not in valid_statuses:
+        return jsonify({"error": f"Invalid status '{new_status}'. Must be one of: {', '.join(valid_statuses)}"}), 400
+
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+
+        # 1. Resolve parcel
+        if parcel_id:
+            cursor.execute("""
+                SELECT parcel_id, tracking_number, status, origin_branch_id, destination_branch_id
+                FROM Parcel
+                WHERE parcel_id = %s
+            """, (parcel_id,))
+        elif tracking_number:
+            cursor.execute("""
+                SELECT parcel_id, tracking_number, status, origin_branch_id, destination_branch_id
+                FROM Parcel
+                WHERE tracking_number = %s
+            """, (tracking_number,))
+        else:
+            return jsonify({"error": "Either parcel_id or tracking_number is required"}), 400
+
+        parcel = cursor.fetchone()
+        if not parcel:
+            return jsonify({"error": "Parcel not found"}), 404
+
+        current_status = parcel["status"]
+        pid = parcel["parcel_id"]
+
+        # 2. Validate status transitions
+        if current_status == "Delivered" and new_status != "Delivered":
+            return jsonify({"error": f"Parcel #{parcel['tracking_number']} is already Delivered. Delivered is a terminal status."}), 400
+
+        if current_status == "Pending" and new_status in ["Out for Delivery", "Delivered"]:
+            return jsonify({"error": f"Cannot transition directly from 'Pending' to '{new_status}'. The parcel must be 'In Transit' first."}), 400
+
+        # 3. Duplicate event prevention (within 5 minutes)
+        five_mins_ago = datetime.now() - timedelta(minutes=5)
+        cursor.execute("""
+            SELECT update_id FROM Tracking_Update
+            WHERE parcel_id = %s AND status = %s AND update_time >= %s
+        """, (pid, new_status, five_mins_ago))
+        if cursor.fetchone():
+            return jsonify({"error": f"A tracking update with status '{new_status}' was already recorded for this parcel within the last 5 minutes."}), 409
+
+        # 4. Resolve branch_id if missing
+        if not branch_id:
+            if new_status in ["Out for Delivery", "Delivered"]:
+                branch_id = parcel["destination_branch_id"]
+            else:
+                branch_id = parcel["origin_branch_id"]
+
+        # 5. Resolve employee_id if missing
+        if not employee_id:
+            cursor.execute("SELECT employee_id FROM Shipment WHERE parcel_id = %s ORDER BY shipment_id DESC LIMIT 1", (pid,))
+            shp_emp = cursor.fetchone()
+            if shp_emp:
+                employee_id = shp_emp["employee_id"]
+            else:
+                cursor.execute("SELECT employee_id FROM Employee WHERE branch_id = %s AND status = 'Active' LIMIT 1", (branch_id,))
+                b_emp = cursor.fetchone()
+                if b_emp:
+                    employee_id = b_emp["employee_id"]
+                else:
+                    cursor.execute("SELECT employee_id FROM Employee WHERE status = 'Active' LIMIT 1")
+                    clerk = cursor.fetchone()
+                    employee_id = clerk["employee_id"] if clerk else 1
+
+        # 6. Format location description if not explicitly provided
+        if not location:
+            cursor.execute("SELECT branch_name, city FROM Branch WHERE branch_id = %s", (branch_id,))
+            b_info = cursor.fetchone()
+            b_name = f"{b_info['branch_name']}, {b_info['city']}" if b_info else "Hub Facility"
+            if new_status == "In Transit":
+                location = f"{b_name} — In Transit between regional distribution centers"
+            elif new_status == "Out for Delivery":
+                location = f"{b_name} — Dispatched with delivery agent for doorstep delivery"
+            elif new_status == "Delivered":
+                location = f"{b_name} — Delivered and signed by recipient"
+            else:
+                location = f"{b_name} — Facility scan"
+
+        if remarks:
+            location = f"{location} ({remarks})"
+
+        # 7. Insert Tracking_Update
+        cursor.execute("""
+            INSERT INTO Tracking_Update (parcel_id, branch_id, employee_id, status, location, update_time)
+            VALUES (%s, %s, %s, %s, %s, NOW())
+        """, (pid, branch_id, employee_id, new_status, location))
+
+        # 8. Update Parcel status
+        cursor.execute("UPDATE Parcel SET status = %s WHERE parcel_id = %s", (new_status, pid))
+
+        # 9. If Delivered, insert or update Delivery record
+        if new_status == "Delivered":
+            cursor.execute("SELECT delivery_id FROM Delivery WHERE parcel_id = %s", (pid,))
+            existing_del = cursor.fetchone()
+            if existing_del:
+                cursor.execute("""
+                    UPDATE Delivery
+                    SET delivery_status = 'Delivered', delivery_date = NOW(), employee_id = %s
+                    WHERE parcel_id = %s
+                """, (employee_id, pid))
+            else:
+                cursor.execute("""
+                    INSERT INTO Delivery (parcel_id, employee_id, delivery_date, delivery_status)
+                    VALUES (%s, %s, NOW(), 'Delivered')
+                """, (pid, employee_id))
+
+        db.commit()
+
+        return jsonify({
+            "message": f"Tracking updated to '{new_status}' successfully",
+            "parcel_id": pid,
+            "tracking_number": parcel["tracking_number"],
+            "status": new_status,
+            "location": location
+        }), 201
+
+    except Exception as error:
+        db.rollback()
+        return jsonify({"error": str(error)}), 500
+    finally:
+        cursor.close()
+        db.close()
+
+
+@app.route("/api/tracking/active-parcels", methods=["GET"])
+def get_active_tracking_parcels():
+    db = get_db_connection()
+    try:
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT
+                p.parcel_id,
+                p.tracking_number,
+                p.status,
+                p.parcel_type,
+                p.weight,
+                c.name AS customer_name,
+                ob.branch_name AS origin_branch,
+                ob.city AS origin_city,
+                db_branch.branch_name AS destination_branch,
+                db_branch.city AS destination_city,
+                p.origin_branch_id,
+                p.destination_branch_id,
+                s.shipment_id,
+                s.employee_id,
+                s.vehicle_id,
+                e.name AS employee_name,
+                v.vehicle_number
+            FROM Parcel p
+            JOIN Customer c ON p.sender_id = c.customer_id
+            JOIN Branch ob ON p.origin_branch_id = ob.branch_id
+            JOIN Branch db_branch ON p.destination_branch_id = db_branch.branch_id
+            LEFT JOIN Shipment s ON p.parcel_id = s.parcel_id
+            LEFT JOIN Employee e ON s.employee_id = e.employee_id
+            LEFT JOIN Vehicle v ON s.vehicle_id = v.vehicle_id
+            WHERE p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+            ORDER BY p.parcel_id DESC
+        """)
+        parcels = cursor.fetchall()
+        for p in parcels:
+            p["weight"] = float(p["weight"])
+        return jsonify(parcels)
+    finally:
+        cursor.close()
+        db.close()
 
 
 # =========================================================
@@ -2168,16 +2521,18 @@ def create_shipment():
         """, (parcel_id, vehicle_id, employee_id))
         shipment_id = cursor.lastrowid
 
-        # 6. If no tracking update exists yet for this parcel, insert an initial dispatch scan
-        cursor.execute("SELECT COUNT(*) as count FROM Tracking_Update WHERE parcel_id = %s", (parcel_id,))
-        if cursor.fetchone()["count"] == 0:
-            cursor.execute("SELECT city, branch_name FROM Branch WHERE branch_id = %s", (parcel["origin_branch_id"],))
-            origin_b = cursor.fetchone()
-            location = f"{origin_b['branch_name']}, {origin_b['city']}" if origin_b else "Origin Hub"
-            cursor.execute("""
-                INSERT INTO Tracking_Update (parcel_id, branch_id, employee_id, status, location, update_time)
-                VALUES (%s, %s, %s, %s, %s, NOW())
-            """, (parcel_id, parcel["origin_branch_id"], employee_id, parcel["status"] or "Pending", location))
+        # Update Parcel status to 'In Transit' if it was Pending
+        if parcel.get("status") == "Pending":
+            cursor.execute("UPDATE Parcel SET status = 'In Transit' WHERE parcel_id = %s", (parcel_id,))
+
+        # Insert dispatch scan in Tracking_Update
+        cursor.execute("SELECT city, branch_name FROM Branch WHERE branch_id = %s", (parcel["origin_branch_id"],))
+        origin_b = cursor.fetchone()
+        location = f"{origin_b['branch_name']}, {origin_b['city']} — Dispatched via {vehicle['vehicle_number']} ({employee['name']})" if origin_b else f"Origin Hub — Dispatched via {vehicle['vehicle_number']}"
+        cursor.execute("""
+            INSERT INTO Tracking_Update (parcel_id, branch_id, employee_id, status, location, update_time)
+            VALUES (%s, %s, %s, 'In Transit', %s, NOW())
+        """, (parcel_id, parcel["origin_branch_id"], employee_id, location))
 
         db.commit()
 

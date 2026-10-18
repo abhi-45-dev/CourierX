@@ -34,7 +34,12 @@ def get_sqlite_db_path():
     if not is_writable or is_serverless:
         tmp_db_path = "/tmp/courier_demo.db"
         try:
-            if not os.path.exists(tmp_db_path) or os.path.getsize(tmp_db_path) == 0:
+            needs_copy = (
+                not os.path.exists(tmp_db_path)
+                or os.path.getsize(tmp_db_path) == 0
+                or os.path.getmtime(SQLITE_DB_PATH) > os.path.getmtime(tmp_db_path)
+            )
+            if needs_copy:
                 shutil.copyfile(SQLITE_DB_PATH, tmp_db_path)
                 try:
                     os.chmod(tmp_db_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH)

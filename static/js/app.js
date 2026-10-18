@@ -6366,18 +6366,69 @@ function setupAuthPortal() {
     // 6. Sign Out
     const logoutBtn = document.getElementById("logoutButton");
     if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
+}
 
-    // 7. Clickable default admin autofill
-    const demoAdminHint = document.getElementById("demoAdminHint");
-    if (demoAdminHint) {
-        demoAdminHint.addEventListener("click", () => {
+const DEMO_ACCOUNTS_MAP = {
+    "Administrator": [
+        { name: "System Admin", email: "admin@courierx.com", pass: "Admin@CourierX2026!" },
+        { name: "Alex Wright", email: "alex.admin@courierx.com", pass: "CourierX2026!" },
+        { name: "Sarah Jenkins", email: "sarah.admin@courierx.com", pass: "CourierX2026!" },
+        { name: "Marcus Vance", email: "marcus.admin@courierx.com", pass: "CourierX2026!" },
+        { name: "Elena Rostova", email: "elena.admin@courierx.com", pass: "CourierX2026!" }
+    ],
+    "Customer": [
+        { name: "Priya Sharma", email: "priya.customer@courierx.com", pass: "CourierX2026!" },
+        { name: "Rahul Mehta", email: "rahul.customer@courierx.com", pass: "CourierX2026!" },
+        { name: "Ananya Iyer", email: "ananya.customer@courierx.com", pass: "CourierX2026!" },
+        { name: "David Miller", email: "david.customer@courierx.com", pass: "CourierX2026!" },
+        { name: "Fatima Khan", email: "fatima.customer@courierx.com", pass: "CourierX2026!" }
+    ],
+    "Courier Partner": [
+        { name: "Rajesh Kumar (Mumbai)", email: "rajesh.courier@courierx.com", pass: "CourierX2026!" },
+        { name: "Vikram Singh (Delhi)", email: "vikram.courier@courierx.com", pass: "CourierX2026!" },
+        { name: "Karthik Nair (Bengaluru)", email: "karthik.courier@courierx.com", pass: "CourierX2026!" },
+        { name: "Amit Patel (Ahmedabad)", email: "amit.courier@courierx.com", pass: "CourierX2026!" },
+        { name: "Suresh Verma (Kolkata)", email: "suresh.courier@courierx.com", pass: "CourierX2026!" }
+    ],
+    "Seller/Vendor": [
+        { name: "Apex Electronics", email: "apex.vendor@courierx.com", pass: "CourierX2026!" },
+        { name: "Urban Vogue", email: "vogue.vendor@courierx.com", pass: "CourierX2026!" },
+        { name: "HealthCare Plus", email: "health.vendor@courierx.com", pass: "CourierX2026!" },
+        { name: "Gourmet Foods", email: "gourmet.vendor@courierx.com", pass: "CourierX2026!" },
+        { name: "Craft & Living", email: "craft.vendor@courierx.com", pass: "CourierX2026!" }
+    ]
+};
+
+function renderDemoAccountChips(role) {
+    const chipsContainer = document.getElementById("demoAccountChips");
+    if (!chipsContainer) return;
+    const accounts = DEMO_ACCOUNTS_MAP[role] || [];
+    chipsContainer.innerHTML = "";
+
+    accounts.forEach(acc => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "demo-account-chip";
+        chip.style.cssText = "background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); color: #e2e8f0; padding: 4px 9px; border-radius: 6px; font-size: 11px; cursor: pointer; transition: all 0.15s ease; display: inline-flex; align-items: center; gap: 5px;";
+        chip.innerHTML = `<i class="fa-solid fa-user-check" style="color: #60a5fa; font-size: 10px;"></i><span>${acc.name}</span>`;
+        chip.addEventListener("mouseenter", () => {
+            chip.style.background = "rgba(59, 130, 246, 0.25)";
+            chip.style.borderColor = "#60a5fa";
+        });
+        chip.addEventListener("mouseleave", () => {
+            chip.style.background = "rgba(255, 255, 255, 0.06)";
+            chip.style.borderColor = "rgba(255, 255, 255, 0.12)";
+        });
+        chip.addEventListener("click", (e) => {
+            e.stopPropagation();
             const emailInput = document.getElementById("loginEmail");
             const passwordInput = document.getElementById("loginPassword");
-            if (emailInput) emailInput.value = "admin@courierx.com";
-            if (passwordInput) passwordInput.value = "Admin@CourierX2026!";
-            showToast("Credentials Populated", "Default admin login & password filled.");
+            if (emailInput) emailInput.value = acc.email;
+            if (passwordInput) passwordInput.value = acc.pass;
+            showToast("Demo Account Selected", `Filled: ${acc.name} (${acc.email})`);
         });
-    }
+        chipsContainer.appendChild(chip);
+    });
 }
 
 
@@ -6453,13 +6504,17 @@ function selectRoleForAuth(role) {
         badgeEl.textContent = role;
     }
 
+    // Always display demo account quick-fill for all roles
+    if (demoHint) {
+        demoHint.style.display = "block";
+        renderDemoAccountChips(role);
+    }
+
     if (role === "Administrator") {
         if (tabRegister) tabRegister.style.display = "none";
-        if (demoHint) demoHint.style.display = "block";
         switchAuthTab("login");
     } else {
         if (tabRegister) tabRegister.style.display = "inline-flex";
-        if (demoHint) demoHint.style.display = "none";
         switchAuthTab("login");
 
         if (role === "Courier Partner") {
@@ -6894,32 +6949,30 @@ function prefillSenderForCustomer() {
     const phoneInput = document.getElementById("senderPhone");
     const addressInput = document.getElementById("senderAddress");
 
+    // Ensure all sender fields are always editable so users can type or edit freely
+    if (nameInput) { nameInput.readOnly = false; nameInput.style.opacity = ""; }
+    if (emailInput) { emailInput.readOnly = false; emailInput.style.opacity = ""; }
+    if (phoneInput) { phoneInput.readOnly = false; phoneInput.style.opacity = ""; }
+    if (addressInput) { addressInput.readOnly = false; addressInput.style.opacity = ""; }
+
+    // Convenience prefill for logged-in Customer or Vendor
     if (user && (user.role === "Customer" || user.role === "Seller/Vendor")) {
-        if (nameInput) {
-            nameInput.value = user.name || "";
-            nameInput.readOnly = true;
-            nameInput.style.opacity = "0.75";
+        if (nameInput && (!nameInput.value || nameInput.dataset.prefilled === "true")) {
+            if (user.name) nameInput.value = user.name;
+            nameInput.dataset.prefilled = "true";
         }
-        if (emailInput) {
-            emailInput.value = user.email || "";
-            emailInput.readOnly = true;
-            emailInput.style.opacity = "0.75";
+        if (emailInput && (!emailInput.value || emailInput.dataset.prefilled === "true")) {
+            if (user.email) emailInput.value = user.email;
+            emailInput.dataset.prefilled = "true";
         }
-        if (phoneInput) {
-            phoneInput.value = user.phone || "";
-            phoneInput.readOnly = true;
-            phoneInput.style.opacity = "0.75";
+        if (phoneInput && (!phoneInput.value || phoneInput.dataset.prefilled === "true")) {
+            if (user.phone) phoneInput.value = user.phone;
+            phoneInput.dataset.prefilled = "true";
         }
-        if (addressInput) {
-            addressInput.value = user.customer_address || "";
-            addressInput.readOnly = true;
-            addressInput.style.opacity = "0.75";
+        if (addressInput && (!addressInput.value || addressInput.dataset.prefilled === "true")) {
+            if (user.customer_address) addressInput.value = user.customer_address;
+            addressInput.dataset.prefilled = "true";
         }
-    } else {
-        if (nameInput) { nameInput.readOnly = false; nameInput.style.opacity = ""; }
-        if (emailInput) { emailInput.readOnly = false; emailInput.style.opacity = ""; }
-        if (phoneInput) { phoneInput.readOnly = false; phoneInput.style.opacity = ""; }
-        if (addressInput) { addressInput.readOnly = false; addressInput.style.opacity = ""; }
     }
 }
 

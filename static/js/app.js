@@ -1,5 +1,13 @@
+// =========================================================
+// COURIERX AUTHENTICATION & GLOBAL STATE
+// =========================================================
+window.currentUser = null;
+window.selectedAuthRole = "Customer";
+
 document.addEventListener("DOMContentLoaded", () => {
+    setupAuthPortal();
     setupNavigation();
+    setupUsersView();
     setupParcelsView();
     setupBranchesView();
     setupShipmentsView();
@@ -12,12 +20,11 @@ document.addEventListener("DOMContentLoaded", () => {
     setupAssignShipmentModal();
     setupUpdateTrackingModal();
     setupOperationalAlerts();
-    loadDashboard();
-    loadAlerts();
-    loadCustomers();
-    loadBranches();
     setupParcelModal();
     setupTracking();
+
+    // Verify session state on initial load
+    checkAuthSession();
 });
 
 
@@ -27,6 +34,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
 async function loadDashboard() {
     try {
+        const user = window.currentUser;
+        if (user && (user.role === "Customer" || user.role === "Seller/Vendor")) {
+            const response = await fetch("/api/customer/dashboard-stats");
+            if (!response.ok) throw new Error("Failed to load customer dashboard");
+            const data = await response.json();
+            updateCustomerDashboard(data);
+            return;
+        }
+
+        if (user && user.role === "Courier Partner") {
+            const response = await fetch("/api/courier/dashboard-stats");
+            if (!response.ok) throw new Error("Failed to load courier dashboard");
+            const data = await response.json();
+            updateCourierDashboard(data);
+            return;
+        }
+
+        // Administrator / Global fallback
         const response = await fetch("/api/dashboard");
 
         if (!response.ok) {
@@ -35,10 +60,98 @@ async function loadDashboard() {
 
         const data = await response.json();
 
+        resetDashboardLabels();
         updateStats(data.stats);
         updateRecentParcels(data.recent_parcels);
     } catch (error) {
         console.error("Dashboard error:", error);
+    }
+}
+
+
+function resetDashboardLabels() {
+    const labels = document.querySelectorAll(".stat-card .stat-content span");
+    if (labels.length >= 4) {
+        labels[0].textContent = "Total Parcels";
+        labels[1].textContent = "In Transit";
+        labels[2].textContent = "Delivered";
+        labels[3].textContent = "Customers";
+    }
+}
+
+
+function updateCustomerDashboard(data) {
+    const totalParcels = document.getElementById("totalParcels");
+    const inTransit = document.getElementById("inTransit");
+    const delivered = document.getElementById("delivered");
+    const totalCustomers = document.getElementById("totalCustomers");
+    const labels = document.querySelectorAll(".stat-card .stat-content span");
+
+    if (labels.length >= 4) {
+        labels[0].textContent = "My Parcels";
+        labels[1].textContent = "In Transit";
+        labels[2].textContent = "Delivered";
+        labels[3].textContent = "Total Spent";
+    }
+
+    if (totalParcels) totalParcels.textContent = (data.total_sent || 0) + (data.total_received || 0);
+    if (inTransit) inTransit.textContent = data.in_transit || 0;
+    if (delivered) delivered.textContent = data.delivered || 0;
+    if (totalCustomers) totalCustomers.textContent = `₹${Number(data.total_spent || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const tableBody = document.getElementById("recentParcels");
+    if (!tableBody) return;
+    tableBody.innerHTML = "";
+
+    const parcels = data.recent_parcels || [];
+    if (parcels.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="4" class="empty-state">No parcel records booked yet</td></tr>`;
+        return;
+    }
+
+    parcels.forEach(p => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td><strong>${escapeHtml(p.tracking_number)}</strong></td>
+            <td>${escapeHtml(p.origin_branch)} → ${escapeHtml(p.destination_branch)}</td>
+            <td>${createStatusBadge(p.status)}</td>
+            <td>${escapeHtml(p.booking_date)}</td>
+        `;
+        tableBody.appendChild(row);
+    });
+}
+
+
+function updateCourierDashboard(data) {
+    const totalParcels = document.getElementById("totalParcels");
+    const inTransit = document.getElementById("inTransit");
+    const delivered = document.getElementById("delivered");
+    const totalCustomers = document.getElementById("totalCustomers");
+    const labels = document.querySelectorAll(".stat-card .stat-content span");
+
+    if (labels.length >= 4) {
+        labels[0].textContent = "Assigned Deliveries";
+        labels[1].textContent = "Active Transit";
+        labels[2].textContent = "Delivered";
+        labels[3].textContent = "Partner Rating";
+    }
+
+    if (totalParcels) totalParcels.textContent = data.total_shipments || 0;
+    if (inTransit) inTransit.textContent = data.active_deliveries || 0;
+    if (delivered) delivered.textContent = data.completed_deliveries || 0;
+    if (totalCustomers) totalCustomers.textContent = `${data.avg_rating || 0} ★ (${data.total_reviews || 0})`;
+
+    const tableBody = document.getElementById("recentParcels");
+    if (tableBody) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="4" class="empty-state" style="padding: 24px; text-align: center;">
+                    <i class="fa-solid fa-truck-fast" style="font-size: 26px; color: #38bdf8; margin-bottom: 8px; display: block;"></i>
+                    <span style="color: #cbd5e1; font-weight: 600;">Delivery Route Active</span>
+                    <p style="color: #64748b; font-size: 13px; margin: 4px 0 0;">Navigate to the <strong>Shipments</strong> view to inspect assigned routes and update transit checkpoints.</p>
+                </td>
+            </tr>
+        `;
     }
 }
 
@@ -344,6 +457,7 @@ function setupParcelModal() {
         );
 
         clearFormMessage();
+        prefillSenderForCustomer();
     };
 
     if (openButton) {
@@ -1656,6 +1770,7 @@ function setupNavigation() {
     const navEmployees = document.getElementById("navEmployees");
     const navPayments = document.getElementById("navPayments");
     const navFeedback = document.getElementById("navFeedback");
+    const navUsers = document.getElementById("navUsers");
     const viewAllButton = document.getElementById("viewAllParcelsButton");
     const assignShipmentButton = document.getElementById("assignShipmentButton");
     const shipmentsAssignButton = document.getElementById("shipmentsAssignButton");
@@ -1736,6 +1851,13 @@ function setupNavigation() {
         });
     }
 
+    if (navUsers) {
+        navUsers.addEventListener("click", event => {
+            event.preventDefault();
+            switchToView("users");
+        });
+    }
+
     if (paymentButton) {
         paymentButton.addEventListener("click", event => {
             event.preventDefault();
@@ -1784,7 +1906,8 @@ function switchToView(viewName) {
         branches: document.getElementById("branchesView"),
         employees: document.getElementById("employeesView"),
         payments: document.getElementById("paymentsView"),
-        feedback: document.getElementById("feedbackView")
+        feedback: document.getElementById("feedbackView"),
+        users: document.getElementById("usersView")
     };
 
     const navs = {
@@ -1797,11 +1920,32 @@ function switchToView(viewName) {
         branches: document.getElementById("navBranches"),
         employees: document.getElementById("navEmployees"),
         payments: document.getElementById("navPayments"),
-        feedback: document.getElementById("navFeedback")
+        feedback: document.getElementById("navFeedback"),
+        users: document.getElementById("navUsers")
     };
 
     const topbarTitle = document.getElementById("topbarTitle");
     const topbarSubtitle = document.getElementById("topbarSubtitle");
+
+    // Role-based view guards
+    const user = window.currentUser;
+    if (user) {
+        if (["customers", "branches", "employees", "vehicles", "users"].includes(viewName)) {
+            if (user.role !== "Administrator") {
+                showToast("Access Restricted", "Administrator privileges required to access this view.");
+                switchToView(user.role === "Courier Partner" ? "shipments" : "dashboard");
+                return;
+            }
+        } else if (viewName === "shipments" && (user.role === "Customer" || user.role === "Seller/Vendor")) {
+            showToast("Access Restricted", "Customer accounts cannot access fleet shipment records.");
+            switchToView("dashboard");
+            return;
+        } else if (viewName === "payments" && user.role === "Courier Partner") {
+            showToast("Access Restricted", "Courier accounts cannot access billing records.");
+            switchToView("shipments");
+            return;
+        }
+    }
 
     // Hide all views
     Object.values(views).forEach(v => {
@@ -1816,8 +1960,8 @@ function switchToView(viewName) {
     if (viewName === "shipments") {
         if (views.shipments) views.shipments.style.display = "block";
         if (navs.shipments) navs.shipments.classList.add("active");
-        if (topbarTitle) topbarTitle.textContent = "Shipments";
-        if (topbarSubtitle) topbarSubtitle.textContent = "Manage shipments, routes, delivery progress, and operational status.";
+        if (topbarTitle) topbarTitle.textContent = user && user.role === "Courier Partner" ? "My Assigned Shipments" : "Shipments";
+        if (topbarSubtitle) topbarSubtitle.textContent = user && user.role === "Courier Partner" ? "Monitor assigned delivery routes, shipment checkpoints, and delivery status." : "Manage shipments, routes, delivery progress, and operational status.";
         loadShipmentStats();
         loadShipmentsTable();
     } else if (viewName === "vehicles") {
@@ -1852,7 +1996,7 @@ function switchToView(viewName) {
     } else if (viewName === "payments") {
         if (views.payments) views.payments.style.display = "block";
         if (navs.payments) navs.payments.classList.add("active");
-        if (topbarTitle) topbarTitle.textContent = "Payments";
+        if (topbarTitle) topbarTitle.textContent = user && (user.role === "Customer" || user.role === "Seller/Vendor") ? "My Invoices & Payments" : "Payments";
         if (topbarSubtitle) topbarSubtitle.textContent = "Parcel revenue collection, invoice history, and QR-based digital verification.";
         loadPaymentStats();
         loadPaymentsTable();
@@ -1863,10 +2007,16 @@ function switchToView(viewName) {
         if (topbarSubtitle) topbarSubtitle.textContent = "Service ratings, customer satisfaction reviews, and shipment delivery remarks.";
         loadFeedbackStats();
         loadFeedbackTable();
+    } else if (viewName === "users") {
+        if (views.users) views.users.style.display = "block";
+        if (navs.users) navs.users.classList.add("active");
+        if (topbarTitle) topbarTitle.textContent = "User Accounts & Approvals";
+        if (topbarSubtitle) topbarSubtitle.textContent = "Manage system accounts, review pending courier and vendor applications, and audit security roles.";
+        loadUsersTable();
     } else if (viewName === "parcels") {
         if (views.parcels) views.parcels.style.display = "block";
         if (navs.parcels) navs.parcels.classList.add("active");
-        if (topbarTitle) topbarTitle.textContent = "Parcels";
+        if (topbarTitle) topbarTitle.textContent = user && (user.role === "Customer" || user.role === "Seller/Vendor") ? "My Parcels" : "Parcels";
         if (topbarSubtitle) topbarSubtitle.textContent = "Manage and track all shipments";
         loadParcels();
     } else {
@@ -3975,12 +4125,20 @@ async function openUpdateTrackingModal(preselectParcelId = null) {
 
         // 3. Populate Employees
         if (employeeSelect) {
-            employeeSelect.innerHTML = `
-                <option value="">-- Choose handling courier/officer --</option>
-                ${employees.map(e => `
-                    <option value="${e.employee_id}">${escapeHtml(e.name)} — ${escapeHtml(e.role || "Officer")} (${escapeHtml(e.branch_name || "")})</option>
-                `).join("")}
-            `;
+            if (window.currentUser && window.currentUser.role === "Courier Partner") {
+                employeeSelect.innerHTML = `
+                    <option value="${window.currentUser.employee_id}" selected>
+                        ${escapeHtml(window.currentUser.name)} — Courier Partner
+                    </option>
+                `;
+            } else {
+                employeeSelect.innerHTML = `
+                    <option value="">-- Choose handling courier/officer --</option>
+                    ${employees.map(e => `
+                        <option value="${e.employee_id}">${escapeHtml(e.name)} — ${escapeHtml(e.role || "Officer")} (${escapeHtml(e.branch_name || "")})</option>
+                    `).join("")}
+                `;
+            }
         }
 
     } catch (error) {
@@ -6058,7 +6216,11 @@ async function handleFeedbackFormSubmit(e) {
             submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Submitting...</span>`;
         }
 
-        const response = await fetch("/api/feedback", {
+        const endpoint = (window.currentUser && window.currentUser.role === "Courier Partner")
+            ? "/api/feedback/courier-review"
+            : "/api/feedback";
+
+        const response = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)
@@ -6138,4 +6300,997 @@ function closeFeedbackDetailsModal() {
         modal.classList.remove("show");
         modal.setAttribute("aria-hidden", "true");
     }
+}
+
+
+// =========================================================
+// COURIERX AUTHENTICATION PORTAL & SESSION MANAGEMENT
+// =========================================================
+
+function setupAuthPortal() {
+    // 1. Role Selection Cards
+    const roleCardCustomer = document.getElementById("roleCardCustomer");
+    const roleCardCourier = document.getElementById("roleCardCourier");
+    const roleCardVendor = document.getElementById("roleCardVendor");
+    const roleCardAdmin = document.getElementById("roleCardAdmin");
+
+    if (roleCardCustomer) roleCardCustomer.addEventListener("click", () => selectRoleForAuth("Customer"));
+    if (roleCardCourier) roleCardCourier.addEventListener("click", () => selectRoleForAuth("Courier Partner"));
+    if (roleCardVendor) roleCardVendor.addEventListener("click", () => selectRoleForAuth("Seller/Vendor"));
+    if (roleCardAdmin) roleCardAdmin.addEventListener("click", () => selectRoleForAuth("Administrator"));
+
+    // 2. Back Navigation
+    const backBtn = document.getElementById("authBackToRoles");
+    if (backBtn) backBtn.addEventListener("click", backToRoleSelection);
+
+    // 3. Form Tabs
+    const tabLogin = document.getElementById("tabAuthLogin");
+    const tabRegister = document.getElementById("tabAuthRegister");
+    if (tabLogin) tabLogin.addEventListener("click", () => switchAuthTab("login"));
+    if (tabRegister) tabRegister.addEventListener("click", () => switchAuthTab("register"));
+
+    // 4. Password Toggles
+    const toggleLoginPw = document.getElementById("toggleLoginPassword");
+    if (toggleLoginPw) {
+        toggleLoginPw.addEventListener("click", () => {
+            const pw = document.getElementById("loginPassword");
+            if (pw) {
+                const isPw = pw.type === "password";
+                pw.type = isPw ? "text" : "password";
+                toggleLoginPw.innerHTML = isPw ? `<i class="fa-regular fa-eye-slash"></i>` : `<i class="fa-regular fa-eye"></i>`;
+            }
+        });
+    }
+
+    const toggleRegPw = document.getElementById("toggleRegPassword");
+    if (toggleRegPw) {
+        toggleRegPw.addEventListener("click", () => {
+            const pw = document.getElementById("regPassword");
+            const pwConf = document.getElementById("regConfirmPassword");
+            if (pw) {
+                const isPw = pw.type === "password";
+                pw.type = isPw ? "text" : "password";
+                if (pwConf) pwConf.type = isPw ? "text" : "password";
+                toggleRegPw.innerHTML = isPw ? `<i class="fa-regular fa-eye-slash"></i>` : `<i class="fa-regular fa-eye"></i>`;
+            }
+        });
+    }
+
+    // 5. Form Submissions
+    const formLogin = document.getElementById("formLogin");
+    if (formLogin) formLogin.addEventListener("submit", handleLoginSubmit);
+
+    const formRegister = document.getElementById("formRegister");
+    if (formRegister) formRegister.addEventListener("submit", handleRegisterSubmit);
+
+    // 6. Sign Out
+    const logoutBtn = document.getElementById("logoutButton");
+    if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
+}
+
+
+async function checkAuthSession() {
+    try {
+        const response = await fetch("/api/auth/me");
+        if (!response.ok) {
+            showAuthOverlay();
+            return;
+        }
+
+        const data = await response.json();
+        if (data.authenticated && data.user) {
+            onAuthSuccess(data.user);
+        } else {
+            showAuthOverlay();
+        }
+    } catch (err) {
+        console.error("Auth session check error:", err);
+        showAuthOverlay();
+    }
+}
+
+
+function showAuthOverlay() {
+    const overlay = document.getElementById("authOverlay");
+    if (overlay) {
+        overlay.classList.remove("hidden");
+    }
+    backToRoleSelection();
+}
+
+
+function hideAuthOverlay() {
+    const overlay = document.getElementById("authOverlay");
+    if (overlay) {
+        overlay.classList.add("hidden");
+    }
+}
+
+
+function selectRoleForAuth(role) {
+    window.selectedAuthRole = role;
+
+    const roleSelection = document.getElementById("authRoleSelection");
+    const formContainer = document.getElementById("authFormContainer");
+    const titleEl = document.getElementById("authFormRoleTitle");
+    const badgeEl = document.getElementById("authFormRoleBadge");
+    const tabRegister = document.getElementById("tabAuthRegister");
+    const demoHint = document.getElementById("demoAdminHint");
+    const regBranchGroup = document.getElementById("regBranchGroup");
+    const regBusinessGroup = document.getElementById("regBusinessGroup");
+    const regAddressGroup = document.getElementById("regAddressGroup");
+    const regNameLabel = document.getElementById("regNameLabel");
+    const regAddressLabel = document.getElementById("regAddressLabel");
+
+    clearAuthBanners();
+
+    if (roleSelection) roleSelection.style.display = "none";
+    if (formContainer) formContainer.style.display = "block";
+
+    const titles = {
+        "Customer": "Customer Portal",
+        "Courier Partner": "Courier Partner Portal",
+        "Seller/Vendor": "Seller / Vendor Portal",
+        "Administrator": "System Administrator"
+    };
+
+    if (titleEl) titleEl.textContent = titles[role] || `${role} Portal`;
+
+    if (badgeEl) {
+        badgeEl.className = `status-badge ${getRoleBadgeClass(role)}`;
+        badgeEl.textContent = role;
+    }
+
+    if (role === "Administrator") {
+        if (tabRegister) tabRegister.style.display = "none";
+        if (demoHint) demoHint.style.display = "block";
+        switchAuthTab("login");
+    } else {
+        if (tabRegister) tabRegister.style.display = "inline-flex";
+        if (demoHint) demoHint.style.display = "none";
+        switchAuthTab("login");
+
+        if (role === "Courier Partner") {
+            if (regBranchGroup) regBranchGroup.style.display = "block";
+            if (regBusinessGroup) regBusinessGroup.style.display = "none";
+            if (regAddressGroup) regAddressGroup.style.display = "none";
+            if (regNameLabel) regNameLabel.textContent = "Courier Full Name";
+            loadBranchesForRegistration();
+        } else if (role === "Seller/Vendor") {
+            if (regBranchGroup) regBranchGroup.style.display = "none";
+            if (regBusinessGroup) regBusinessGroup.style.display = "block";
+            if (regAddressGroup) regAddressGroup.style.display = "block";
+            if (regNameLabel) regNameLabel.textContent = "Authorized Representative Name";
+            if (regAddressLabel) regAddressLabel.textContent = "Registered Warehouse / Hub Address";
+        } else {
+            // Customer
+            if (regBranchGroup) regBranchGroup.style.display = "none";
+            if (regBusinessGroup) regBusinessGroup.style.display = "none";
+            if (regAddressGroup) regAddressGroup.style.display = "block";
+            if (regNameLabel) regNameLabel.textContent = "Full Name";
+            if (regAddressLabel) regAddressLabel.textContent = "Residential / Delivery Address";
+        }
+    }
+}
+
+
+function backToRoleSelection() {
+    const roleSelection = document.getElementById("authRoleSelection");
+    const formContainer = document.getElementById("authFormContainer");
+
+    if (roleSelection) roleSelection.style.display = "block";
+    if (formContainer) formContainer.style.display = "none";
+
+    clearAuthBanners();
+    resetAuthForms();
+}
+
+
+function switchAuthTab(tab) {
+    const tabLogin = document.getElementById("tabAuthLogin");
+    const tabRegister = document.getElementById("tabAuthRegister");
+    const formLogin = document.getElementById("formLogin");
+    const formRegister = document.getElementById("formRegister");
+    const adminNotice = document.getElementById("adminRegisterNotice");
+
+    clearAuthBanners();
+
+    if (tab === "login") {
+        if (tabLogin) tabLogin.classList.add("active");
+        if (tabRegister) tabRegister.classList.remove("active");
+        if (formLogin) formLogin.style.display = "block";
+        if (formRegister) formRegister.style.display = "none";
+        if (adminNotice) adminNotice.style.display = "none";
+    } else {
+        if (tabLogin) tabLogin.classList.remove("active");
+        if (tabRegister) tabRegister.classList.add("active");
+
+        if (window.selectedAuthRole === "Administrator") {
+            if (formLogin) formLogin.style.display = "none";
+            if (formRegister) formRegister.style.display = "none";
+            if (adminNotice) adminNotice.style.display = "block";
+        } else {
+            if (formLogin) formLogin.style.display = "none";
+            if (formRegister) formRegister.style.display = "block";
+            if (adminNotice) adminNotice.style.display = "none";
+        }
+    }
+}
+
+
+async function loadBranchesForRegistration() {
+    const branchSelect = document.getElementById("regBranchId");
+    if (!branchSelect) return;
+
+    try {
+        const response = await fetch("/api/branches?status=Active");
+        if (!response.ok) return;
+
+        const branches = await response.json();
+        branchSelect.innerHTML = `<option value="">Select Home Operating Branch...</option>`;
+        branches.forEach(b => {
+            const opt = document.createElement("option");
+            opt.value = b.branch_id;
+            opt.textContent = `${b.branch_name} (${b.city}, ${b.state})`;
+            branchSelect.appendChild(opt);
+        });
+    } catch (e) {
+        console.error("Error loading branches for registration:", e);
+    }
+}
+
+
+async function handleLoginSubmit(e) {
+    e.preventDefault();
+    clearAuthBanners();
+
+    const emailInput = document.getElementById("loginEmail");
+    const passwordInput = document.getElementById("loginPassword");
+    const submitBtn = document.getElementById("submitLoginBtn");
+
+    const email = emailInput ? emailInput.value.trim() : "";
+    const password = passwordInput ? passwordInput.value : "";
+    const role = window.selectedAuthRole;
+
+    if (!email || !password) {
+        showAuthError("Please provide both email and password.");
+        return;
+    }
+
+    try {
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Signing In...</span>`;
+        }
+
+        const response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password, role })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Authentication failed. Please verify credentials.");
+        }
+
+        showToast("Signed In", `Welcome back, ${data.user.name}!`);
+        resetAuthForms();
+        onAuthSuccess(data.user);
+    } catch (err) {
+        showAuthError(err.message);
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i><span>Sign In to CourierX</span>`;
+        }
+    }
+}
+
+
+async function handleRegisterSubmit(e) {
+    e.preventDefault();
+    clearAuthBanners();
+
+    const role = window.selectedAuthRole;
+    const nameInput = document.getElementById("regName");
+    const emailInput = document.getElementById("regEmail");
+    const phoneInput = document.getElementById("regPhone");
+    const passwordInput = document.getElementById("regPassword");
+    const confirmInput = document.getElementById("regConfirmPassword");
+    const branchSelect = document.getElementById("regBranchId");
+    const addressInput = document.getElementById("regAddress");
+    const businessInput = document.getElementById("regBusinessName");
+    const submitBtn = document.getElementById("submitRegisterBtn");
+
+    const name = nameInput ? nameInput.value.trim() : "";
+    const email = emailInput ? emailInput.value.trim() : "";
+    const phone = phoneInput ? phoneInput.value.trim() : "";
+    const password = passwordInput ? passwordInput.value : "";
+    const confirmPassword = confirmInput ? confirmInput.value : "";
+
+    if (!name || !email || !phone || !password) {
+        showAuthError("All required registration fields must be provided.");
+        return;
+    }
+
+    if (password.length < 8) {
+        showAuthError("Password must be at least 8 characters long.");
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        showAuthError("Passwords do not match. Please re-enter.");
+        return;
+    }
+
+    let endpoint = "";
+    let payload = { name, email, phone, password, confirm_password: confirmPassword };
+
+    if (role === "Customer") {
+        endpoint = "/api/auth/register/customer";
+        payload.address = addressInput ? addressInput.value.trim() : "";
+    } else if (role === "Courier Partner") {
+        endpoint = "/api/auth/register/courier";
+        const branchId = branchSelect ? parseInt(branchSelect.value, 10) : 0;
+        if (!branchId) {
+            showAuthError("Please select a valid home operating branch.");
+            return;
+        }
+        payload.branch_id = branchId;
+    } else if (role === "Seller/Vendor") {
+        endpoint = "/api/auth/register/vendor";
+        payload.business_name = businessInput ? businessInput.value.trim() : "";
+        payload.address = addressInput ? addressInput.value.trim() : "";
+    } else {
+        showAuthError("Self-registration is not permitted for administrative accounts.");
+        return;
+    }
+
+    try {
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Registering Account...</span>`;
+        }
+
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Registration failed.");
+        }
+
+        if (role === "Customer") {
+            showToast("Registration Complete", "Your customer account has been created and verified!");
+            resetAuthForms();
+            onAuthSuccess(data.user);
+        } else {
+            // Courier or Vendor -> Pending status
+            showAuthSuccess("Application Submitted! Your registration is currently awaiting Administrator review. Once verified, you will be able to log in.");
+            resetAuthForms();
+            setTimeout(() => {
+                switchAuthTab("login");
+            }, 3500);
+        }
+    } catch (err) {
+        showAuthError(err.message);
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-user-plus"></i><span>Complete Registration</span>`;
+        }
+    }
+}
+
+
+async function handleLogout() {
+    try {
+        await fetch("/api/auth/logout", { method: "POST" });
+    } catch (e) {
+        console.error("Logout error:", e);
+    } finally {
+        window.currentUser = null;
+        showToast("Signed Out", "You have been logged out of your session.");
+        showAuthOverlay();
+    }
+}
+
+
+function onAuthSuccess(user) {
+    window.currentUser = user;
+    hideAuthOverlay();
+
+    // 1. Update Topbar User Profile
+    const userNameEl = document.getElementById("topbarUserName");
+    const userRoleEl = document.getElementById("topbarUserRole");
+    const avatarEl = document.getElementById("topbarAvatar");
+
+    if (userNameEl) userNameEl.textContent = user.name || user.email;
+    if (userRoleEl) {
+        userRoleEl.textContent = user.role;
+        userRoleEl.className = `status-badge ${getRoleBadgeClass(user.role)}`;
+    }
+    if (avatarEl) avatarEl.textContent = getInitials(user.name || user.email);
+
+    // 2. Adjust Sidebar Navigation & Action Buttons per Role
+    applyRoleNavigation(user.role);
+
+    // 3. Load Role-Specific Initial Data
+    loadRoleInitialData(user);
+}
+
+
+function applyRoleNavigation(role) {
+    const navDashboard = document.getElementById("navDashboard");
+    const navParcels = document.getElementById("navParcels");
+    const navShipments = document.getElementById("navShipments");
+    const navTracking = document.getElementById("navTracking");
+    const navCustomers = document.getElementById("navCustomers");
+    const navBranches = document.getElementById("navBranches");
+    const navEmployees = document.getElementById("navEmployees");
+    const navVehicles = document.getElementById("navVehicles");
+    const navUsers = document.getElementById("navUsers");
+    const navPayments = document.getElementById("navPayments");
+    const navFeedback = document.getElementById("navFeedback");
+
+    const newParcelButton = document.getElementById("newParcelButton");
+    const parcelsNewButton = document.getElementById("parcelsNewButton");
+    const assignShipmentButton = document.getElementById("assignShipmentButton");
+    const shipmentsAssignButton = document.getElementById("shipmentsAssignButton");
+
+    // Helper to toggle visibility
+    const setDisplay = (el, show, displayType = "flex") => {
+        if (el) el.style.display = show ? displayType : "none";
+    };
+
+    // Sidebar Section Headers
+    const navLabels = document.querySelectorAll(".sidebar-nav .nav-label");
+    const mgmtLabel = navLabels.length >= 2 ? navLabels[1] : null;
+    const financeLabel = navLabels.length >= 3 ? navLabels[2] : null;
+
+    if (role === "Administrator") {
+        setDisplay(navDashboard, true);
+        setDisplay(navParcels, true);
+        setDisplay(navShipments, true);
+        setDisplay(navTracking, true);
+        setDisplay(navCustomers, true);
+        setDisplay(navBranches, true);
+        setDisplay(navEmployees, true);
+        setDisplay(navVehicles, true);
+        setDisplay(navUsers, true);
+        setDisplay(navPayments, true);
+        setDisplay(navFeedback, true);
+
+        if (mgmtLabel) mgmtLabel.style.display = "block";
+        if (financeLabel) financeLabel.style.display = "block";
+
+        setDisplay(newParcelButton, true, "inline-flex");
+        setDisplay(parcelsNewButton, true, "inline-flex");
+        setDisplay(assignShipmentButton, true, "inline-flex");
+        setDisplay(shipmentsAssignButton, true, "inline-flex");
+
+        if (navParcels) {
+            const span = navParcels.querySelector("span");
+            if (span) span.textContent = "Parcels";
+        }
+        if (navShipments) {
+            const span = navShipments.querySelector("span");
+            if (span) span.textContent = "Shipments";
+        }
+        if (navPayments) {
+            const span = navPayments.querySelector("span");
+            if (span) span.textContent = "Payments";
+        }
+        if (navFeedback) {
+            const span = navFeedback.querySelector("span");
+            if (span) span.textContent = "Feedback";
+        }
+    } else if (role === "Customer" || role === "Seller/Vendor") {
+        setDisplay(navDashboard, true);
+        setDisplay(navParcels, true);
+        setDisplay(navShipments, false);
+        setDisplay(navTracking, true);
+        setDisplay(navCustomers, false);
+        setDisplay(navBranches, false);
+        setDisplay(navEmployees, false);
+        setDisplay(navVehicles, false);
+        setDisplay(navUsers, false);
+        setDisplay(navPayments, true);
+        setDisplay(navFeedback, true);
+
+        if (mgmtLabel) mgmtLabel.style.display = "none";
+        if (financeLabel) financeLabel.style.display = "block";
+
+        setDisplay(newParcelButton, true, "inline-flex");
+        setDisplay(parcelsNewButton, true, "inline-flex");
+        setDisplay(assignShipmentButton, false);
+        setDisplay(shipmentsAssignButton, false);
+
+        if (navParcels) {
+            const span = navParcels.querySelector("span");
+            if (span) span.textContent = role === "Seller/Vendor" ? "Commercial Parcels" : "My Parcels";
+        }
+        if (navPayments) {
+            const span = navPayments.querySelector("span");
+            if (span) span.textContent = role === "Seller/Vendor" ? "Billing & Invoices" : "My Invoices";
+        }
+        if (navFeedback) {
+            const span = navFeedback.querySelector("span");
+            if (span) span.textContent = "My Reviews";
+        }
+    } else if (role === "Courier Partner") {
+        setDisplay(navDashboard, true);
+        setDisplay(navParcels, false);
+        setDisplay(navShipments, true);
+        setDisplay(navTracking, true);
+        setDisplay(navCustomers, false);
+        setDisplay(navBranches, false);
+        setDisplay(navEmployees, false);
+        setDisplay(navVehicles, false);
+        setDisplay(navUsers, false);
+        setDisplay(navPayments, false);
+        setDisplay(navFeedback, true);
+
+        if (mgmtLabel) mgmtLabel.style.display = "none";
+        if (financeLabel) financeLabel.style.display = "none";
+
+        setDisplay(newParcelButton, false);
+        setDisplay(parcelsNewButton, false);
+        setDisplay(assignShipmentButton, false);
+        setDisplay(shipmentsAssignButton, false);
+
+        if (navShipments) {
+            const span = navShipments.querySelector("span");
+            if (span) span.textContent = "My Assigned Shipments";
+        }
+        if (navFeedback) {
+            const span = navFeedback.querySelector("span");
+            if (span) span.textContent = "Delivery Reviews";
+        }
+    }
+}
+
+
+function loadRoleInitialData(user) {
+    if (user.role === "Administrator") {
+        loadDashboard();
+        loadAlerts();
+        loadBranches();
+        loadCustomers();
+        loadPendingUsersCount();
+        switchToView("dashboard");
+    } else if (user.role === "Customer" || user.role === "Seller/Vendor") {
+        loadDashboard();
+        loadBranches();
+        switchToView("dashboard");
+    } else if (user.role === "Courier Partner") {
+        loadDashboard();
+        switchToView("shipments");
+        loadShipmentsTable();
+    }
+}
+
+
+function prefillSenderForCustomer() {
+    const user = window.currentUser;
+    const nameInput = document.getElementById("senderName");
+    const emailInput = document.getElementById("senderEmail");
+    const phoneInput = document.getElementById("senderPhone");
+    const addressInput = document.getElementById("senderAddress");
+
+    if (user && (user.role === "Customer" || user.role === "Seller/Vendor")) {
+        if (nameInput) {
+            nameInput.value = user.name || "";
+            nameInput.readOnly = true;
+            nameInput.style.opacity = "0.75";
+        }
+        if (emailInput) {
+            emailInput.value = user.email || "";
+            emailInput.readOnly = true;
+            emailInput.style.opacity = "0.75";
+        }
+        if (phoneInput) {
+            phoneInput.value = user.phone || "";
+            phoneInput.readOnly = true;
+            phoneInput.style.opacity = "0.75";
+        }
+        if (addressInput) {
+            addressInput.value = user.customer_address || "";
+            addressInput.readOnly = true;
+            addressInput.style.opacity = "0.75";
+        }
+    } else {
+        if (nameInput) { nameInput.readOnly = false; nameInput.style.opacity = ""; }
+        if (emailInput) { emailInput.readOnly = false; emailInput.style.opacity = ""; }
+        if (phoneInput) { phoneInput.readOnly = false; phoneInput.style.opacity = ""; }
+        if (addressInput) { addressInput.readOnly = false; addressInput.style.opacity = ""; }
+    }
+}
+
+
+function showAuthError(msg) {
+    const banner = document.getElementById("authErrorBanner");
+    const text = document.getElementById("authErrorText");
+    if (banner && text) {
+        text.textContent = msg;
+        banner.style.display = "flex";
+    }
+}
+
+
+function showAuthSuccess(msg) {
+    const banner = document.getElementById("authSuccessBanner");
+    const text = document.getElementById("authSuccessText");
+    if (banner && text) {
+        text.textContent = msg;
+        banner.style.display = "flex";
+    }
+}
+
+
+function clearAuthBanners() {
+    const err = document.getElementById("authErrorBanner");
+    const succ = document.getElementById("authSuccessBanner");
+    const info = document.getElementById("authInfoNote");
+    if (err) err.style.display = "none";
+    if (succ) succ.style.display = "none";
+    if (info) info.style.display = "none";
+}
+
+
+function resetAuthForms() {
+    const fl = document.getElementById("formLogin");
+    const fr = document.getElementById("formRegister");
+    if (fl) fl.reset();
+    if (fr) fr.reset();
+}
+
+
+function getRoleBadgeClass(role) {
+    if (role === "Administrator") return "badge-role-admin";
+    if (role === "Courier Partner") return "badge-role-courier";
+    if (role === "Seller/Vendor") return "badge-role-vendor";
+    return "badge-role-customer";
+}
+
+
+function getInitials(name) {
+    if (!name) return "CX";
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+
+// =========================================================
+// USERS & APPROVALS MANAGEMENT (ADMINISTRATOR)
+// =========================================================
+
+let usersSearchDebounceTimer = null;
+let cachedTotalUsers = 0;
+let cachedPendingUsers = 0;
+let cachedActiveCouriers = 0;
+let cachedActiveVendors = 0;
+
+function setupUsersView() {
+    const searchInput = document.getElementById("usersSearchInput");
+    const roleFilter = document.getElementById("usersRoleFilter");
+    const statusFilter = document.getElementById("usersStatusFilter");
+    const refreshButton = document.getElementById("refreshUsersButton");
+
+    if (searchInput) {
+        searchInput.addEventListener("input", () => {
+            clearTimeout(usersSearchDebounceTimer);
+            usersSearchDebounceTimer = setTimeout(() => {
+                loadUsersTable();
+            }, 300);
+        });
+        searchInput.addEventListener("keydown", event => {
+            if (event.key === "Enter") {
+                clearTimeout(usersSearchDebounceTimer);
+                loadUsersTable();
+            }
+        });
+    }
+
+    if (roleFilter) {
+        roleFilter.addEventListener("change", () => loadUsersTable());
+    }
+
+    if (statusFilter) {
+        statusFilter.addEventListener("change", () => loadUsersTable());
+    }
+
+    if (refreshButton) {
+        refreshButton.addEventListener("click", () => {
+            loadUsersTable();
+            showToast("Users Refreshed", "User accounts reloaded from database.");
+        });
+    }
+}
+
+
+async function loadUsersTable() {
+    const tableBody = document.getElementById("usersTableBody");
+    const searchInput = document.getElementById("usersSearchInput");
+    const roleFilter = document.getElementById("usersRoleFilter");
+    const statusFilter = document.getElementById("usersStatusFilter");
+
+    if (!tableBody) return;
+
+    const searchQuery = searchInput ? searchInput.value.trim() : "";
+    const selectedRole = roleFilter ? roleFilter.value.trim() : "";
+    const selectedStatus = statusFilter ? statusFilter.value.trim() : "";
+
+    const params = new URLSearchParams();
+    if (searchQuery) params.append("search", searchQuery);
+    if (selectedRole) params.append("role", selectedRole);
+    if (selectedStatus) params.append("status", selectedStatus);
+
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="8" class="empty-state">
+                <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px;"></i>
+                Loading user accounts...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const url = `/api/admin/users${params.toString() ? `?${params.toString()}` : ""}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+                tableBody.innerHTML = `<tr><td colspan="8" class="empty-state">Access denied. Administrator privileges required.</td></tr>`;
+                return;
+            }
+            throw new Error("Failed to load user accounts");
+        }
+
+        const users = await response.json();
+
+        // Calculate and update metrics
+        updateUserMetrics(users, !selectedRole && !selectedStatus && !searchQuery);
+
+        renderUsersTable(users);
+    } catch (error) {
+        console.error("Error loading users:", error);
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="8" class="empty-state error-message">
+                    <i class="fa-solid fa-triangle-exclamation" style="margin-right: 8px;"></i>
+                    Failed to load user accounts. Please try refreshing.
+                </td>
+            </tr>
+        `;
+    }
+}
+
+
+function updateUserMetrics(users, isUnfiltered) {
+    if (isUnfiltered) {
+        cachedTotalUsers = users.length;
+        cachedPendingUsers = users.filter(u => u.status === "Pending").length;
+        cachedActiveCouriers = users.filter(u => u.role === "Courier Partner" && u.status === "Active").length;
+        cachedActiveVendors = users.filter(u => u.role === "Seller/Vendor" && u.status === "Active").length;
+    }
+
+    const totalEl = document.getElementById("metricTotalUsers");
+    const pendingEl = document.getElementById("metricPendingUsers");
+    const couriersEl = document.getElementById("metricActiveCouriers");
+    const vendorsEl = document.getElementById("metricActiveVendors");
+    const pendingBadge = document.getElementById("pendingUsersBadge");
+
+    if (totalEl) totalEl.textContent = cachedTotalUsers;
+    if (pendingEl) pendingEl.textContent = cachedPendingUsers;
+    if (couriersEl) couriersEl.textContent = cachedActiveCouriers;
+    if (vendorsEl) vendorsEl.textContent = cachedActiveVendors;
+
+    if (pendingBadge) {
+        if (cachedPendingUsers > 0) {
+            pendingBadge.textContent = cachedPendingUsers;
+            pendingBadge.style.display = "inline-flex";
+        } else {
+            pendingBadge.style.display = "none";
+        }
+    }
+}
+
+
+async function loadPendingUsersCount() {
+    try {
+        const res = await fetch("/api/admin/users?status=Pending");
+        if (!res.ok) return;
+        const pendingUsers = await res.json();
+        const pendingBadge = document.getElementById("pendingUsersBadge");
+        if (pendingBadge) {
+            if (pendingUsers.length > 0) {
+                pendingBadge.textContent = pendingUsers.length;
+                pendingBadge.style.display = "inline-flex";
+            } else {
+                pendingBadge.style.display = "none";
+            }
+        }
+    } catch (e) {
+        // Silently ignore for non-admins
+    }
+}
+
+
+function renderUsersTable(users) {
+    const tableBody = document.getElementById("usersTableBody");
+    if (!tableBody) return;
+
+    if (!users || users.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="8" class="empty-state">
+                    <div style="padding: 24px 0; text-align: center;">
+                        <i class="fa-solid fa-users-slash" style="font-size: 32px; color: #475569; margin-bottom: 12px; display: block;"></i>
+                        <strong style="color: #cbd5e1; font-size: 15px; display: block; margin-bottom: 4px;">No user accounts found</strong>
+                        <span style="color: #64748b; font-size: 13px;">No accounts match your current search or filter criteria.</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tableBody.innerHTML = users.map(u => {
+        const roleBadge = getRoleBadgeHtml(u.role);
+        const statusBadge = getUserStatusBadgeHtml(u.status);
+
+        let linkedEntity = "—";
+        if (u.role === "Courier Partner") {
+            linkedEntity = `<span style="font-size: 12px; color: #38bdf8;"><i class="fa-solid fa-building" style="margin-right: 4px;"></i>${escapeHtml(u.branch_name || 'Unassigned')}</span>`;
+            if (u.employee_id) {
+                linkedEntity += `<small style="display:block; color:#64748b; font-family: monospace;">#EMP-${u.employee_id}</small>`;
+            }
+        } else if (u.role === "Customer" || u.role === "Seller/Vendor") {
+            linkedEntity = `<span style="font-size: 12px; color: #94a3b8;"><i class="fa-solid fa-id-card" style="margin-right: 4px;"></i>#CUST-${u.customer_id || 'N/A'}</span>`;
+            if (u.customer_address) {
+                linkedEntity += `<small style="display:block; color:#64748b; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(u.customer_address)}</small>`;
+            }
+        } else if (u.role === "Administrator") {
+            linkedEntity = `<span style="font-size: 12px; color: #10b981;"><i class="fa-solid fa-shield" style="margin-right: 4px;"></i>System Root</span>`;
+        }
+
+        let actionButtons = "";
+        const isSelf = window.currentUser && window.currentUser.user_id === u.user_id;
+
+        if (u.status === "Pending") {
+            actionButtons = `
+                <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                    <button type="button" class="action-btn action-btn-activate btn-user-action" data-user-id="${u.user_id}" data-action="Active" title="Approve Application">
+                        <i class="fa-solid fa-check"></i>
+                        <span>Approve</span>
+                    </button>
+                    <button type="button" class="action-btn action-btn-delete btn-user-action" data-user-id="${u.user_id}" data-action="Rejected" title="Reject Application">
+                        <i class="fa-solid fa-xmark"></i>
+                        <span>Reject</span>
+                    </button>
+                </div>
+            `;
+        } else if (u.status === "Active") {
+            if (isSelf) {
+                actionButtons = `<span style="color: #60a5fa; font-size: 12px; font-weight: 600;"><i class="fa-solid fa-user-check"></i> Current User</span>`;
+            } else {
+                actionButtons = `
+                    <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                        <button type="button" class="action-btn action-btn-deactivate btn-user-action" data-user-id="${u.user_id}" data-action="Suspended" title="Suspend Account Access">
+                            <i class="fa-solid fa-ban"></i>
+                            <span>Suspend</span>
+                        </button>
+                    </div>
+                `;
+            }
+        } else if (u.status === "Suspended" || u.status === "Rejected") {
+            actionButtons = `
+                <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                    <button type="button" class="action-btn action-btn-activate btn-user-action" data-user-id="${u.user_id}" data-action="Active" title="Reactivate Account">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span>Activate</span>
+                    </button>
+                </div>
+            `;
+        }
+
+        return `
+            <tr>
+                <td>
+                    <span class="tracking-pill" style="font-family: monospace;">#USR-${u.user_id}</span>
+                </td>
+                <td>
+                    <div class="customer-cell">
+                        <strong>${escapeHtml(u.name)}</strong>
+                        ${u.business_name ? `<span class="cell-subtext" style="color: #c084fc;"><i class="fa-solid fa-store" style="font-size: 10px; margin-right: 3px;"></i>${escapeHtml(u.business_name)}</span>` : ""}
+                    </div>
+                </td>
+                <td>
+                    <div class="customer-cell">
+                        <span style="font-size: 13px; color: #f1f5f9;">${escapeHtml(u.email)}</span>
+                        <span class="cell-subtext">${escapeHtml(u.phone || "—")}</span>
+                    </div>
+                </td>
+                <td>${roleBadge}</td>
+                <td>${statusBadge}</td>
+                <td>${linkedEntity}</td>
+                <td>
+                    <span class="date-cell">${escapeHtml(u.created_at || "—")}</span>
+                </td>
+                <td style="text-align: right;">
+                    ${actionButtons}
+                </td>
+            </tr>
+        `;
+    }).join("");
+
+    // Bind action button clicks
+    tableBody.querySelectorAll(".btn-user-action").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const userId = btn.getAttribute("data-user-id");
+            const newStatus = btn.getAttribute("data-action");
+            if (!userId || !newStatus) return;
+
+            const actionLabel = newStatus === "Active" ? "approve/activate" : (newStatus === "Rejected" ? "reject" : "suspend");
+            if (!confirm(`Are you sure you want to ${actionLabel} user account #USR-${userId}?`)) {
+                return;
+            }
+
+            await updateUserStatus(userId, newStatus);
+        });
+    });
+}
+
+
+async function updateUserStatus(userId, newStatus) {
+    try {
+        const response = await fetch(`/api/admin/users/${userId}/status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: newStatus })
+        });
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || "Failed to update user status");
+        }
+
+        showToast("Account Updated", result.message || `User account status changed to ${newStatus}.`);
+        loadUsersTable();
+    } catch (err) {
+        console.error("Error updating user status:", err);
+        showToast("Operation Failed", err.message);
+    }
+}
+
+
+function getRoleBadgeHtml(role) {
+    if (role === "Administrator") {
+        return `<span class="status-badge badge-role-admin">Admin</span>`;
+    } else if (role === "Courier Partner") {
+        return `<span class="status-badge badge-role-courier">Courier</span>`;
+    } else if (role === "Seller/Vendor") {
+        return `<span class="status-badge badge-role-vendor">Vendor</span>`;
+    } else {
+        return `<span class="status-badge badge-role-customer">Customer</span>`;
+    }
+}
+
+
+function getUserStatusBadgeHtml(status) {
+    if (status === "Active") {
+        return `<span class="status-badge status-delivered">Active</span>`;
+    } else if (status === "Pending") {
+        return `<span class="status-badge status-out" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border-color: rgba(245, 158, 11, 0.3);">Pending</span>`;
+    } else if (status === "Suspended") {
+        return `<span class="status-badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">Suspended</span>`;
+    } else if (status === "Rejected") {
+        return `<span class="status-badge" style="background: rgba(148, 163, 184, 0.15); color: #94a3b8; border-color: rgba(148, 163, 184, 0.3);">Rejected</span>`;
+    }
+    return `<span class="status-badge status-pending">${escapeHtml(status || "Unknown")}</span>`;
 }

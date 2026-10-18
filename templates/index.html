@@ -342,6 +342,12 @@
                     <span>Vehicles</span>
                 </a>
 
+                <a href="#" id="navUsers" class="nav-item" data-view="users">
+                    <i class="fa-solid fa-user-shield"></i>
+                    <span>User Accounts</span>
+                    <span id="pendingUsersBadge" class="status-badge status-out" style="display:none; font-size: 10px; margin-left: auto; padding: 2px 6px;">0</span>
+                </a>
+
 
                 <p class="nav-label">FINANCE</p>
 
@@ -426,17 +432,17 @@
                         </div>
                     </div>
 
-                    <div class="admin-profile">
-
-                        <div class="avatar">
-                            AD
+                    <div id="topbarUserSection" style="display: flex; align-items: center; gap: 10px;">
+                        <div class="user-profile-btn" id="currentUserProfileBtn">
+                            <div class="avatar" id="topbarAvatar">AD</div>
+                            <div class="admin-info" style="text-align: left;">
+                                <strong id="topbarUserName">Administrator</strong>
+                                <span id="topbarUserRole" class="status-badge badge-role-admin" style="font-size: 11px; padding: 2px 8px; border-radius: 4px;">System Admin</span>
+                            </div>
                         </div>
-
-                        <div class="admin-info">
-                            <strong>Administrator</strong>
-                            <span>System Admin</span>
-                        </div>
-
+                        <button id="logoutButton" class="logout-icon-btn" type="button" title="Sign Out of CourierX">
+                            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                        </button>
                     </div>
 
                 </div>
@@ -2105,6 +2111,112 @@
                     </div>
                 </div>
 
+            </section>
+
+            <!-- =================================================
+             USER ACCOUNTS & APPROVALS (ADMINISTRATOR)
+        ================================================== -->
+            <section id="usersView" class="dashboard-content view-section" style="display: none;">
+                <div class="view-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+                    <div>
+                        <span class="eyebrow">IDENTITY & ACCESS MANAGEMENT</span>
+                        <h2 style="font-size: 26px; font-weight: 700; color: var(--text-primary); margin-top: 4px;">User Accounts & Approvals</h2>
+                        <p style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">Manage system accounts, review pending courier and vendor applications, and audit security roles.</p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button id="refreshUsersButton" class="secondary-button" type="button">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- METRICS GRID -->
+                <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 24px;">
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-title">Total Users</span>
+                            <i class="fa-solid fa-users-gear" style="color: #60a5fa;"></i>
+                        </div>
+                        <div class="metric-value" id="metricTotalUsers">0</div>
+                        <div class="metric-subtext">Across all platform roles</div>
+                    </div>
+                    <div class="metric-card" style="border-color: rgba(245, 158, 11, 0.4);">
+                        <div class="metric-header">
+                            <span class="metric-title">Pending Approvals</span>
+                            <i class="fa-solid fa-user-clock" style="color: #f59e0b;"></i>
+                        </div>
+                        <div class="metric-value" id="metricPendingUsers" style="color: #f59e0b;">0</div>
+                        <div class="metric-subtext">Awaiting administrator verification</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-title">Active Couriers</span>
+                            <i class="fa-solid fa-truck-fast" style="color: #38bdf8;"></i>
+                        </div>
+                        <div class="metric-value" id="metricActiveCouriers">0</div>
+                        <div class="metric-subtext">Verified delivery partners</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <span class="metric-title">Active Vendors</span>
+                            <i class="fa-solid fa-store" style="color: #c084fc;"></i>
+                        </div>
+                        <div class="metric-value" id="metricActiveVendors">0</div>
+                        <div class="metric-subtext">Commercial shipping accounts</div>
+                    </div>
+                </div>
+
+                <!-- FILTER BAR -->
+                <div class="panel filter-panel" style="margin-bottom: 20px;">
+                    <div class="filter-row" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <div class="search-input-wrapper" style="flex: 1; min-width: 240px;">
+                            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                            <input type="text" id="usersSearchInput" placeholder="Search by name, email, phone, business..." autocomplete="off">
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="usersRoleFilter" class="filter-select">
+                                <option value="">All Roles</option>
+                                <option value="Customer">Customer</option>
+                                <option value="Courier Partner">Courier Partner</option>
+                                <option value="Seller/Vendor">Seller/Vendor</option>
+                                <option value="Administrator">Administrator</option>
+                            </select>
+                            <select id="usersStatusFilter" class="filter-select">
+                                <option value="">All Statuses</option>
+                                <option value="Pending">Pending Approval</option>
+                                <option value="Active">Active</option>
+                                <option value="Suspended">Suspended</option>
+                                <option value="Rejected">Rejected</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- USERS TABLE -->
+                <div class="panel table-panel">
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>User / Contact</th>
+                                    <th>Email / Phone</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Linked Entity / Branch</th>
+                                    <th>Registered</th>
+                                    <th style="text-align: right;">Approval & Access</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                <tr>
+                                    <td colspan="8" class="empty-state">Loading user accounts...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
 
         </main>
@@ -3905,6 +4017,253 @@
 
             <div class="modal-actions" style="margin-top: 24px;">
                 <button type="button" id="dismissFeedbackDetailsButton" class="secondary-button">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================================================
+     COURIERX AUTHENTICATION & ROLE SELECTION PORTAL
+    ========================================================== -->
+    <div id="authOverlay" class="auth-overlay hidden">
+        <div class="auth-card">
+            <div class="auth-header">
+                <div class="auth-brand">
+                    <div class="auth-brand-icon">
+                        <i class="fa-solid fa-box-open"></i>
+                    </div>
+                    <div class="auth-brand-text">
+                        <h2>CourierX Identity & Gateway</h2>
+                        <p>Enterprise Logistics Platform — Multi-User Authentication</p>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="status-dot"></span>
+                    <small style="color: var(--text-secondary); font-size: 12px; font-weight: 600;">MySQL Connected</small>
+                </div>
+            </div>
+
+            <div class="auth-body">
+                <!-- SCREEN 1: ROLE SELECTION -->
+                <div id="authRoleSelection">
+                    <div style="text-align: center; margin-bottom: 24px;">
+                        <h3 style="font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">Select Account Role</h3>
+                        <p style="font-size: 14px; color: var(--text-secondary);">Choose your role to access role-specific workflows, shipment data, and authorized records.</p>
+                    </div>
+
+                    <div class="role-grid">
+                        <!-- Customer -->
+                        <div class="role-card" data-role="Customer" id="roleCardCustomer">
+                            <div class="role-card-header">
+                                <div class="role-icon customer">
+                                    <i class="fa-solid fa-user"></i>
+                                </div>
+                                <span class="status-badge badge-role-customer" style="font-size: 11px;">Consumer</span>
+                            </div>
+                            <div class="role-card-title">Customer Portal</div>
+                            <div class="role-card-desc">Book personal parcels, track real-time transit, manage invoices with QR codes, and rate couriers.</div>
+                            <div class="role-card-footer">
+                                <span>Continue as Customer</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </div>
+                        </div>
+
+                        <!-- Courier Partner -->
+                        <div class="role-card" data-role="Courier Partner" id="roleCardCourier">
+                            <div class="role-card-header">
+                                <div class="role-icon courier">
+                                    <i class="fa-solid fa-truck-fast"></i>
+                                </div>
+                                <span class="status-badge badge-role-courier" style="font-size: 11px;">Operations</span>
+                            </div>
+                            <div class="role-card-title">Courier Partner</div>
+                            <div class="role-card-desc">Access assigned deliveries, record transit scans & dispatch updates, check ratings, and submit customer reviews.</div>
+                            <div class="role-card-footer">
+                                <span>Continue as Courier</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </div>
+                        </div>
+
+                        <!-- Seller / Vendor -->
+                        <div class="role-card" data-role="Seller/Vendor" id="roleCardVendor">
+                            <div class="role-card-header">
+                                <div class="role-icon vendor">
+                                    <i class="fa-solid fa-store"></i>
+                                </div>
+                                <span class="status-badge badge-role-vendor" style="font-size: 11px;">Commercial</span>
+                            </div>
+                            <div class="role-card-title">Seller / Vendor</div>
+                            <div class="role-card-desc">Bulk commercial bookings, B2B dispatch logistics, business expense tracking, and carrier service ratings.</div>
+                            <div class="role-card-footer">
+                                <span>Continue as Vendor</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </div>
+                        </div>
+
+                        <!-- Administrator -->
+                        <div class="role-card" data-role="Administrator" id="roleCardAdmin">
+                            <div class="role-card-header">
+                                <div class="role-icon admin">
+                                    <i class="fa-solid fa-shield-halved"></i>
+                                </div>
+                                <span class="status-badge badge-role-admin" style="font-size: 11px;">Executive</span>
+                            </div>
+                            <div class="role-card-title">Administrator</div>
+                            <div class="role-card-desc">System-wide operational oversight, fleet & staff management, branch control, and partner account approvals.</div>
+                            <div class="role-card-footer">
+                                <span>Administrative Sign In</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SCREEN 2: AUTH FORMS (LOGIN / REGISTER) -->
+                <div id="authFormContainer" style="display: none;">
+                    <div class="auth-panel">
+                        <div class="auth-nav-back" id="authBackToRoles">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            <span>Change Role Selection</span>
+                        </div>
+
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                            <div>
+                                <h3 id="authFormRoleTitle" style="font-size: 20px; font-weight: 700; color: var(--text-primary); margin: 0;">Customer Portal</h3>
+                                <p style="font-size: 13px; color: var(--text-secondary); margin: 2px 0 0;">Sign in to your account or register to get started</p>
+                            </div>
+                            <span id="authFormRoleBadge" class="status-badge badge-role-customer" style="font-size: 12px; padding: 4px 10px;">Customer</span>
+                        </div>
+
+                        <!-- Tabs: Login / Register -->
+                        <div class="auth-tabs" id="authTabsWrapper">
+                            <button type="button" class="auth-tab-btn active" id="tabAuthLogin">Sign In</button>
+                            <button type="button" class="auth-tab-btn" id="tabAuthRegister">Create Account</button>
+                        </div>
+
+                        <!-- Alert Banners -->
+                        <div id="authErrorBanner" class="auth-error-banner" style="display: none;">
+                            <i class="fa-solid fa-triangle-exclamation" style="margin-top: 2px;"></i>
+                            <span id="authErrorText">Authentication failed.</span>
+                        </div>
+
+                        <div id="authSuccessBanner" class="auth-success-banner" style="display: none;">
+                            <i class="fa-solid fa-circle-check" style="margin-top: 2px;"></i>
+                            <span id="authSuccessText">Operation completed successfully.</span>
+                        </div>
+
+                        <div id="authInfoNote" class="auth-info-note" style="display: none;">
+                            <i class="fa-solid fa-circle-info" style="margin-right: 6px;"></i>
+                            <span id="authInfoText"></span>
+                        </div>
+
+                        <!-- LOGIN FORM -->
+                        <form id="formLogin">
+                            <div class="auth-form-group">
+                                <label for="loginEmail">Email Address</label>
+                                <div class="auth-input-wrapper">
+                                    <input type="email" id="loginEmail" placeholder="you@domain.com" required autocomplete="username">
+                                </div>
+                            </div>
+
+                            <div class="auth-form-group">
+                                <label for="loginPassword">Password</label>
+                                <div class="auth-input-wrapper">
+                                    <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+                                    <button type="button" class="auth-pw-toggle" id="toggleLoginPassword" aria-label="Toggle password visibility">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="auth-submit-btn" id="submitLoginBtn" style="margin-top: 24px;">
+                                <i class="fa-solid fa-right-to-bracket"></i>
+                                <span>Sign In to CourierX</span>
+                            </button>
+
+                            <div id="demoAdminHint" style="display: none; margin-top: 16px; padding: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: 8px; font-size: 12px; color: var(--text-secondary); text-align: center;">
+                                <span>Default Admin: <strong style="color: #60a5fa;">admin@courierx.com</strong> / <code style="color: #e2e8f0;">Admin@CourierX2026!</code></span>
+                            </div>
+                        </form>
+
+                        <!-- REGISTRATION FORM -->
+                        <form id="formRegister" style="display: none;">
+                            <div class="auth-form-group">
+                                <label for="regName" id="regNameLabel">Full Name</label>
+                                <div class="auth-input-wrapper">
+                                    <input type="text" id="regName" placeholder="e.g. Johnathan Doe" required>
+                                </div>
+                            </div>
+
+                            <!-- Business Name (Vendor only) -->
+                            <div class="auth-form-group" id="regBusinessGroup" style="display: none;">
+                                <label for="regBusinessName">Registered Business Name</label>
+                                <div class="auth-input-wrapper">
+                                    <input type="text" id="regBusinessName" placeholder="e.g. Acme Logistics Pvt Ltd">
+                                </div>
+                            </div>
+
+                            <div class="auth-form-group">
+                                <label for="regEmail">Email Address</label>
+                                <div class="auth-input-wrapper">
+                                    <input type="email" id="regEmail" placeholder="e.g. contact@domain.com" required>
+                                </div>
+                            </div>
+
+                            <div class="auth-form-group">
+                                <label for="regPhone">Phone Number</label>
+                                <div class="auth-input-wrapper">
+                                    <input type="tel" id="regPhone" placeholder="e.g. 9876543210" required>
+                                </div>
+                            </div>
+
+                            <!-- Branch Assignment (Courier only) -->
+                            <div class="auth-form-group" id="regBranchGroup" style="display: none;">
+                                <label for="regBranchId">Assigned Operating Branch</label>
+                                <div class="auth-input-wrapper">
+                                    <select id="regBranchId">
+                                        <option value="">Select Home Operating Branch...</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Address (Customer and Vendor only) -->
+                            <div class="auth-form-group" id="regAddressGroup">
+                                <label for="regAddress" id="regAddressLabel">Residential / Shipping Address</label>
+                                <div class="auth-input-wrapper">
+                                    <textarea id="regAddress" rows="2" placeholder="Street, locality, city, pincode..." style="resize: vertical;"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="auth-form-group">
+                                <label for="regPassword">Password (Min 8 Characters)</label>
+                                <div class="auth-input-wrapper">
+                                    <input type="password" id="regPassword" placeholder="••••••••" required>
+                                    <button type="button" class="auth-pw-toggle" id="toggleRegPassword" aria-label="Toggle password visibility">
+                                        <i class="fa-regular fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="auth-form-group">
+                                <label for="regConfirmPassword">Confirm Password</label>
+                                <div class="auth-input-wrapper">
+                                    <input type="password" id="regConfirmPassword" placeholder="••••••••" required>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="auth-submit-btn" id="submitRegisterBtn" style="margin-top: 24px;">
+                                <i class="fa-solid fa-user-plus"></i>
+                                <span>Complete Registration</span>
+                            </button>
+                        </form>
+
+                        <!-- Admin Registration Disabled Notice -->
+                        <div id="adminRegisterNotice" style="display: none; padding: 24px 20px; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; text-align: center;">
+                            <i class="fa-solid fa-lock" style="font-size: 28px; color: #10b981; margin-bottom: 12px;"></i>
+                            <h4 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">Administrative Provisioning Restricted</h4>
+                            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin: 0;">System Administrator accounts cannot be created through public self-registration. Administrative credentials are provisioned exclusively through secure server CLI procedures.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

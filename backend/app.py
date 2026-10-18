@@ -5,11 +5,16 @@ import string
 import re
 from datetime import datetime, timedelta
 from decimal import Decimal
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, session
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from db import get_db_connection
 from qr_code import generate_qr_svg
+from auth import (
+    ROLE_ADMIN, ROLE_CUSTOMER, ROLE_COURIER, ROLE_VENDOR,
+    get_current_user, login_required, role_required
+)
+from auth_routes import auth_bp
 
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -19,6 +24,13 @@ app = Flask(
     template_folder=os.path.join(BASE_DIR, "templates"),
     static_folder=os.path.join(BASE_DIR, "static")
 )
+
+app.secret_key = os.getenv("SECRET_KEY", "courierx-production-secret-key-2026-safe-secure")
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
+
+app.register_blueprint(auth_bp)
 
 
 # =========================================================
@@ -35,6 +47,7 @@ def home():
 # =========================================================
 
 @app.route("/api/customers", methods=["GET"])
+@role_required(ROLE_ADMIN)
 def get_customers():
 
     search_query = request.args.get("search", "").strip()
@@ -104,6 +117,7 @@ def get_customers():
 
 
 @app.route("/api/customers/stats", methods=["GET"])
+@role_required(ROLE_ADMIN)
 def get_customer_stats():
 
     db = get_db_connection()
@@ -143,6 +157,11 @@ def get_customer_stats():
 
 @app.route("/api/customers/<int:customer_id>", methods=["GET"])
 def get_customer(customer_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Authentication required."}), 401
+    if user["role"] != ROLE_ADMIN and user.get("customer_id") != customer_id:
+        return jsonify({"error": "Access forbidden. You cannot view another customer's profile."}), 403
 
     db = get_db_connection()
     try:
@@ -220,6 +239,7 @@ def get_customer(customer_id):
 
 
 @app.route("/api/customers", methods=["POST"])
+@role_required(ROLE_ADMIN)
 def create_customer():
 
     data = request.get_json()
@@ -273,6 +293,11 @@ def create_customer():
 
 @app.route("/api/customers/<int:customer_id>", methods=["PUT"])
 def update_customer(customer_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Authentication required."}), 401
+    if user["role"] != ROLE_ADMIN and user.get("customer_id") != customer_id:
+        return jsonify({"error": "Access forbidden. You cannot modify another customer's profile."}), 403
 
     data = request.get_json()
     if not data:
@@ -328,6 +353,7 @@ def update_customer(customer_id):
 
 
 @app.route("/api/customers/<int:customer_id>", methods=["DELETE"])
+@role_required(ROLE_ADMIN)
 def delete_customer(customer_id):
 
     db = get_db_connection()
@@ -546,6 +572,7 @@ def get_branch(branch_id):
 
 
 @app.route("/api/branches", methods=["POST"])
+@role_required(ROLE_ADMIN)
 def create_branch():
 
     data = request.get_json()
@@ -623,6 +650,7 @@ def create_branch():
 
 
 @app.route("/api/branches/<int:branch_id>", methods=["PUT"])
+@role_required(ROLE_ADMIN)
 def update_branch(branch_id):
 
     data = request.get_json()
@@ -704,6 +732,7 @@ def update_branch(branch_id):
 
 
 @app.route("/api/branches/<int:branch_id>/status", methods=["PATCH"])
+@role_required(ROLE_ADMIN)
 def update_branch_status(branch_id):
 
     data = request.get_json() or {}
@@ -741,6 +770,7 @@ def update_branch_status(branch_id):
 
 
 @app.route("/api/branches/<int:branch_id>", methods=["DELETE"])
+@role_required(ROLE_ADMIN)
 def delete_branch(branch_id):
 
     force_deactivate = (
@@ -1020,6 +1050,9 @@ def get_operational_alerts():
 
 @app.route("/api/parcels", methods=["GET"])
 def get_parcels():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Authentication required. Please log in."}), 401
 
     search_query = request.args.get("search", "").strip()
     status_filter = request.args.get("status", "").strip()
@@ -1031,6 +1064,16 @@ def get_parcels():
 
         conditions = []
         params = []
+
+        # Role-based data scoping
+        if user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+            cust_id = user["customer_id"]
+            conditions.append("(p.sender_id = %s OR p.receiver_id = %s)")
+            params.extend([cust_id, cust_id])
+        elif user["role"] == ROLE_COURIER:
+            emp_id = user["employee_id"]
+            conditions.append("p.parcel_id IN (SELECT s.parcel_id FROM Shipment s WHERE s.employee_id = %s)")
+            params.append(emp_id)
 
         if search_query:
             conditions.append("""(
@@ -1353,39 +1396,27 @@ def create_parcel():
 
 
     # =====================================================
-    # SENDER
+    # AUTHENTICATE USER & SENDER
     # =====================================================
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Authentication required. Please log in to book a parcel."}), 401
 
-    sender_name = (
-        data.get(
-            "sender_name",
-            ""
-        ).strip()
-    )
+    if user["role"] == ROLE_COURIER:
+        return jsonify({"error": "Courier partners cannot book parcels. Please use a customer or merchant account."}), 403
 
-
-    sender_email = (
-        data.get(
-            "sender_email",
-            ""
-        ).strip().lower()
-    )
-
-
-    sender_phone = (
-        data.get(
-            "sender_phone",
-            ""
-        ).strip()
-    )
-
-
-    sender_address = (
-        data.get(
-            "sender_address",
-            ""
-        ).strip()
-    )
+    if user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+        sender_name = user["name"]
+        sender_email = user["email"]
+        sender_phone = user["phone"]
+        sender_address = (data.get("sender_address") or user.get("customer_address") or "").strip()
+        if not sender_address:
+            return jsonify({"error": "Sender address is required."}), 400
+    else:
+        sender_name = (data.get("sender_name", "")).strip()
+        sender_email = (data.get("sender_email", "")).strip().lower()
+        sender_phone = (data.get("sender_phone", "")).strip()
+        sender_address = (data.get("sender_address", "")).strip()
 
 
     # =====================================================
@@ -1572,15 +1603,18 @@ def create_parcel():
             }), 400
 
         # -------------------------------------------------
-        # FIND / CREATE SENDER
+        # RESOLVE SENDER IDENTITY
         # -------------------------------------------------
-        sender_id = get_or_create_customer(
-            cursor,
-            sender_name,
-            sender_email,
-            sender_phone,
-            sender_address
-        )
+        if user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+            sender_id = user["customer_id"]
+        else:
+            sender_id = get_or_create_customer(
+                cursor,
+                sender_name,
+                sender_email,
+                sender_phone,
+                sender_address
+            )
 
         # -------------------------------------------------
         # FIND / CREATE RECEIVER
@@ -2029,6 +2063,12 @@ def track_parcel(
 
 @app.route("/api/tracking/events", methods=["POST"])
 def add_tracking_event():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Authentication required. Please log in."}), 401
+    if user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+        return jsonify({"error": "Access forbidden. Customer and merchant accounts cannot record delivery tracking events."}), 403
+
     data = request.get_json()
     if not data:
         return jsonify({"error": "Request body is required"}), 400
@@ -2071,6 +2111,14 @@ def add_tracking_event():
 
         current_status = parcel["status"]
         pid = parcel["parcel_id"]
+
+        # Check courier authorization: courier can only update parcels assigned to them
+        if user["role"] == ROLE_COURIER:
+            emp_id = user["employee_id"]
+            cursor.execute("SELECT shipment_id FROM Shipment WHERE parcel_id = %s AND employee_id = %s", (pid, emp_id))
+            if not cursor.fetchone():
+                return jsonify({"error": "Access forbidden. You can only record tracking events for shipments assigned to your profile."}), 403
+            employee_id = emp_id
 
         # 2. Validate status transitions
         if current_status == "Delivered" and new_status != "Delivered":
@@ -2173,10 +2221,20 @@ def add_tracking_event():
 
 @app.route("/api/tracking/active-parcels", methods=["GET"])
 def get_active_tracking_parcels():
+    user = get_current_user()
     db = get_db_connection()
     try:
         cursor = db.cursor(dictionary=True)
-        cursor.execute("""
+        conditions = ["p.status IN ('Pending', 'In Transit', 'Out for Delivery')"]
+        params = []
+
+        if user and user["role"] == ROLE_COURIER:
+            conditions.append("s.employee_id = %s")
+            params.append(user["employee_id"])
+
+        where_clause = f"WHERE {' AND '.join(conditions)}"
+
+        cursor.execute(f"""
             SELECT
                 p.parcel_id,
                 p.tracking_number,
@@ -2202,9 +2260,9 @@ def get_active_tracking_parcels():
             LEFT JOIN Shipment s ON p.parcel_id = s.parcel_id
             LEFT JOIN Employee e ON s.employee_id = e.employee_id
             LEFT JOIN Vehicle v ON s.vehicle_id = v.vehicle_id
-            WHERE p.status IN ('Pending', 'In Transit', 'Out for Delivery')
+            {where_clause}
             ORDER BY p.parcel_id DESC
-        """)
+        """, tuple(params))
         parcels = cursor.fetchall()
         for p in parcels:
             p["weight"] = float(p["weight"])
@@ -2220,6 +2278,12 @@ def get_active_tracking_parcels():
 
 @app.route("/api/shipments", methods=["GET"])
 def get_shipments():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Authentication required. Please log in."}), 401
+
+    if user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+        return jsonify({"error": "Access forbidden. Customer and merchant accounts cannot access fleet shipment records."}), 403
 
     search_query = request.args.get("search", "").strip()
     status_filter = request.args.get("status", "").strip()
@@ -2231,6 +2295,10 @@ def get_shipments():
 
         conditions = []
         params = []
+
+        if user["role"] == ROLE_COURIER:
+            conditions.append("s.employee_id = %s")
+            params.append(user["employee_id"])
 
         if search_query:
             conditions.append("""(
@@ -2369,6 +2437,11 @@ def get_shipment_stats():
 
 @app.route("/api/shipments/<int:shipment_id>", methods=["GET"])
 def get_shipment(shipment_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Authentication required."}), 401
+    if user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+        return jsonify({"error": "Access forbidden. Customer and merchant accounts cannot access internal shipment records."}), 403
 
     db = get_db_connection()
 
@@ -2441,6 +2514,9 @@ def get_shipment(shipment_id):
 
         if shipment is None:
             return jsonify({"error": "Shipment not found"}), 404
+
+        if user["role"] == ROLE_COURIER and shipment["employee_id"] != user["employee_id"]:
+            return jsonify({"error": "Access forbidden. This shipment is assigned to another courier."}), 403
 
         # Related tracking history for the shipment's parcel
         cursor.execute("""
@@ -2591,6 +2667,7 @@ def get_unassigned_parcels():
 # =========================================================
 
 @app.route("/api/vehicles", methods=["GET"])
+@role_required(ROLE_ADMIN)
 def get_vehicles():
 
     search_query = request.args.get("search", "").strip()
@@ -2665,6 +2742,7 @@ def get_vehicles():
 
 
 @app.route("/api/vehicles/stats", methods=["GET"])
+@role_required(ROLE_ADMIN)
 def get_vehicle_stats():
 
     db = get_db_connection()
@@ -2701,6 +2779,7 @@ def get_vehicle_stats():
 
 
 @app.route("/api/vehicles/<int:vehicle_id>", methods=["GET"])
+@role_required(ROLE_ADMIN)
 def get_vehicle(vehicle_id):
 
     db = get_db_connection()
@@ -2755,6 +2834,7 @@ def get_vehicle(vehicle_id):
 # =========================================================
 
 @app.route("/api/employees", methods=["GET"])
+@role_required(ROLE_ADMIN)
 def get_employees():
     branch_id = request.args.get("branch_id")
     search_query = request.args.get("search", "").strip()
@@ -2823,6 +2903,7 @@ def get_employees():
 
 
 @app.route("/api/employees/stats", methods=["GET"])
+@role_required(ROLE_ADMIN)
 def get_employee_stats():
     db = get_db_connection()
     try:
@@ -2847,6 +2928,7 @@ def get_employee_stats():
 
 
 @app.route("/api/employees/<int:employee_id>", methods=["GET"])
+@role_required(ROLE_ADMIN)
 def get_employee(employee_id):
     db = get_db_connection()
     try:
@@ -2907,6 +2989,7 @@ def get_employee(employee_id):
 
 
 @app.route("/api/employees", methods=["POST"])
+@role_required(ROLE_ADMIN)
 def create_employee():
     data = request.get_json()
     if not data:
@@ -2965,6 +3048,7 @@ def create_employee():
 
 
 @app.route("/api/employees/<int:employee_id>", methods=["PUT"])
+@role_required(ROLE_ADMIN)
 def update_employee(employee_id):
     data = request.get_json()
     if not data:
@@ -3038,6 +3122,7 @@ def update_employee(employee_id):
 
 
 @app.route("/api/employees/<int:employee_id>/status", methods=["PATCH"])
+@role_required(ROLE_ADMIN)
 def toggle_employee_status(employee_id):
     data = request.get_json() or {}
     new_status = data.get("status")
@@ -3082,6 +3167,7 @@ def toggle_employee_status(employee_id):
 
 
 @app.route("/api/employees/<int:employee_id>", methods=["DELETE"])
+@role_required(ROLE_ADMIN)
 def delete_employee(employee_id):
     db = get_db_connection()
     try:
@@ -3116,6 +3202,13 @@ def delete_employee(employee_id):
 
 @app.route("/api/payments", methods=["GET"])
 def get_payments():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Authentication required. Please log in."}), 401
+
+    if user["role"] == ROLE_COURIER:
+        return jsonify({"error": "Access forbidden. Couriers cannot access payment administration."}), 403
+
     search_query = request.args.get("search", "").strip()
     status_filter = request.args.get("status", "").strip()
     method_filter = (request.args.get("payment_method") or request.args.get("method") or "").strip()
@@ -3125,6 +3218,10 @@ def get_payments():
         cursor = db.cursor(dictionary=True)
         conditions = []
         params = []
+
+        if user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+            conditions.append("py.customer_id = %s")
+            params.append(user["customer_id"])
 
         if status_filter:
             conditions.append("py.payment_status = %s")
@@ -3305,6 +3402,12 @@ def get_payment(payment_id):
 
 @app.route("/api/payments", methods=["POST"])
 def create_payment():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Authentication required. Please log in."}), 401
+    if user["role"] == ROLE_COURIER:
+        return jsonify({"error": "Access forbidden. Couriers cannot create payment records."}), 403
+
     data = request.get_json()
     if not data:
         return jsonify({"error": "Request body is required"}), 400
@@ -3337,8 +3440,12 @@ def create_payment():
         if cursor.fetchone():
             return jsonify({"error": "A payment record already exists for this parcel"}), 409
 
-        # Auto-derive customer_id from parcel sender if not provided
-        if not customer_id:
+        # Check ownership: customers and vendors can only pay for their own bookings
+        if user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+            if parcel["sender_id"] != user["customer_id"]:
+                return jsonify({"error": "Access forbidden. You can only record payments for your own parcel bookings."}), 403
+            customer_id = user["customer_id"]
+        elif not customer_id:
             customer_id = parcel["sender_id"]
 
         # Validate customer exists
@@ -3482,6 +3589,10 @@ def get_payment_qr(payment_id):
 
 @app.route("/api/feedback", methods=["GET"])
 def get_feedback():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Authentication required. Please log in."}), 401
+
     search_query = request.args.get("search", "").strip()
     rating_filter = request.args.get("rating", "").strip()
 
@@ -3490,6 +3601,13 @@ def get_feedback():
         cursor = db.cursor(dictionary=True)
         conditions = []
         params = []
+
+        if user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+            conditions.append("(fb.customer_id = %s OR fb.reviewer_user_id = %s)")
+            params.extend([user["customer_id"], user["user_id"]])
+        elif user["role"] == ROLE_COURIER:
+            conditions.append("(fb.target_employee_id = %s OR fb.reviewer_user_id = %s)")
+            params.extend([user["employee_id"], user["user_id"]])
 
         if rating_filter and rating_filter.isdigit():
             conditions.append("fb.rating = %s")
@@ -3518,6 +3636,11 @@ def get_feedback():
                 fb.rating,
                 fb.comments,
                 DATE_FORMAT(fb.feedback_date, '%Y-%m-%d %H:%i') AS feedback_date,
+                fb.reviewer_role,
+                fb.target_employee_id,
+                fb.moderation_status,
+                fb.moderation_note,
+                e.name AS courier_name,
                 p.tracking_number,
                 p.status AS parcel_status,
                 c.name AS customer_name,
@@ -3526,6 +3649,7 @@ def get_feedback():
             FROM Feedback fb
             JOIN Parcel p ON fb.parcel_id = p.parcel_id
             JOIN Customer c ON fb.customer_id = c.customer_id
+            LEFT JOIN Employee e ON fb.target_employee_id = e.employee_id
             {where_clause}
             ORDER BY fb.feedback_id DESC
         """
@@ -3538,20 +3662,35 @@ def get_feedback():
 
 @app.route("/api/feedback/stats", methods=["GET"])
 def get_feedback_stats():
+    user = get_current_user()
     db = get_db_connection()
     try:
         cursor = db.cursor(dictionary=True)
-        cursor.execute("SELECT COUNT(*) AS total_feedback, ROUND(COALESCE(AVG(rating), 0), 1) AS average_rating FROM Feedback")
+        conditions = []
+        params = []
+
+        if user and user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+            conditions.append("(customer_id = %s OR reviewer_user_id = %s)")
+            params.extend([user["customer_id"], user["user_id"]])
+        elif user and user["role"] == ROLE_COURIER:
+            conditions.append("(target_employee_id = %s OR reviewer_user_id = %s)")
+            params.extend([user["employee_id"], user["user_id"]])
+
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+        cursor.execute(f"SELECT COUNT(*) AS total_feedback, ROUND(COALESCE(AVG(rating), 0), 1) AS average_rating FROM Feedback {where_clause}", tuple(params))
         res = cursor.fetchone()
         total_feedback = res["total_feedback"] or 0
         avg_rating = float(res["average_rating"] or 0)
 
         # Rating distribution
-        cursor.execute("""
+        dist_where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        cursor.execute(f"""
             SELECT rating, COUNT(*) AS cnt
             FROM Feedback
+            {dist_where}
             GROUP BY rating
-        """)
+        """, tuple(params))
         counts = {str(i): 0 for i in range(1, 6)}
         for r in cursor.fetchall():
             counts[str(r["rating"])] = r["cnt"]
@@ -3568,10 +3707,28 @@ def get_feedback_stats():
 
 @app.route("/api/feedback/eligible-parcels", methods=["GET"])
 def get_eligible_feedback_parcels():
+    user = get_current_user()
     db = get_db_connection()
     try:
         cursor = db.cursor(dictionary=True)
-        cursor.execute("""
+        conditions = ["p.status = 'Delivered'"]
+        params = []
+
+        if user and user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+            conditions.append("p.sender_id = %s")
+            params.append(user["customer_id"])
+            conditions.append("NOT EXISTS (SELECT 1 FROM Feedback fb WHERE fb.parcel_id = p.parcel_id AND fb.reviewer_role = %s)")
+            params.append(user["role"])
+        elif user and user["role"] == ROLE_COURIER:
+            conditions.append("EXISTS (SELECT 1 FROM Shipment s WHERE s.parcel_id = p.parcel_id AND s.employee_id = %s)")
+            params.append(user["employee_id"])
+            conditions.append("NOT EXISTS (SELECT 1 FROM Feedback fb WHERE fb.parcel_id = p.parcel_id AND fb.reviewer_role = 'Courier Partner')")
+        else:
+            conditions.append("NOT EXISTS (SELECT 1 FROM Feedback fb WHERE fb.parcel_id = p.parcel_id)")
+
+        where_clause = f"WHERE {' AND '.join(conditions)}"
+
+        cursor.execute(f"""
             SELECT
                 p.parcel_id,
                 p.tracking_number,
@@ -3581,10 +3738,9 @@ def get_eligible_feedback_parcels():
                 p.parcel_type
             FROM Parcel p
             JOIN Customer c ON p.sender_id = c.customer_id
-            LEFT JOIN Feedback fb ON p.parcel_id = fb.parcel_id
-            WHERE fb.feedback_id IS NULL
+            {where_clause}
             ORDER BY p.parcel_id DESC
-        """)
+        """, tuple(params))
         return jsonify(cursor.fetchall())
     finally:
         cursor.close()
@@ -3626,6 +3782,13 @@ def get_feedback_detail(feedback_id):
 
 @app.route("/api/feedback", methods=["POST"])
 def create_feedback():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Authentication required. Please log in."}), 401
+
+    if user["role"] == ROLE_COURIER:
+        return jsonify({"error": "Couriers should use the courier review endpoint to review customer deliveries."}), 400
+
     data = request.get_json()
     if not data:
         return jsonify({"error": "Request body is required"}), 400
@@ -3656,28 +3819,38 @@ def create_feedback():
         cursor = db.cursor(dictionary=True)
 
         # Verify parcel exists
-        cursor.execute("SELECT parcel_id, sender_id FROM Parcel WHERE parcel_id = %s", (parcel_id,))
+        cursor.execute("SELECT parcel_id, sender_id, receiver_id, status FROM Parcel WHERE parcel_id = %s", (parcel_id,))
         parcel = cursor.fetchone()
         if not parcel:
             return jsonify({"error": "Parcel not found"}), 404
 
-        # Enforce unique feedback per parcel
-        cursor.execute("SELECT feedback_id FROM Feedback WHERE parcel_id = %s", (parcel_id,))
-        if cursor.fetchone():
-            return jsonify({"error": "Feedback has already been submitted for this parcel"}), 409
-
-        if not customer_id:
+        if user["role"] in [ROLE_CUSTOMER, ROLE_VENDOR]:
+            if parcel["sender_id"] != user["customer_id"] and parcel.get("receiver_id") != user["customer_id"]:
+                return jsonify({"error": "Access forbidden. You can only review your own parcels."}), 403
+            customer_id = user["customer_id"]
+        elif not customer_id:
             customer_id = parcel["sender_id"]
 
-        # Verify customer exists
-        cursor.execute("SELECT customer_id FROM Customer WHERE customer_id = %s", (customer_id,))
-        if not cursor.fetchone():
-            return jsonify({"error": "Customer not found"}), 404
+        # Enforce unique feedback per parcel for this reviewer role
+        cursor.execute("""
+            SELECT feedback_id FROM Feedback 
+            WHERE parcel_id = %s AND reviewer_role = %s
+        """, (parcel_id, user["role"]))
+        if cursor.fetchone():
+            return jsonify({"error": f"Feedback has already been submitted for this parcel by a {user['role']}."}), 409
+
+        # Find target courier who handled this delivery
+        cursor.execute("SELECT employee_id FROM Shipment WHERE parcel_id = %s ORDER BY shipment_id DESC LIMIT 1", (parcel_id,))
+        sh_emp = cursor.fetchone()
+        target_emp_id = sh_emp["employee_id"] if sh_emp else None
 
         cursor.execute("""
-            INSERT INTO Feedback (parcel_id, customer_id, rating, comments, feedback_date)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (parcel_id, customer_id, rating, comments, datetime.now()))
+            INSERT INTO Feedback (
+                parcel_id, customer_id, rating, comments, feedback_date,
+                reviewer_role, reviewer_user_id, target_employee_id, moderation_status
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Approved')
+        """, (parcel_id, customer_id, rating, comments, datetime.now(), user["role"], user["user_id"], target_emp_id))
         db.commit()
 
         new_id = cursor.lastrowid

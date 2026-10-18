@@ -22,3 +22,7 @@ ENV/
 .idea/
 .DS_Store
 .vercel
+
+# Local Database Backups
+/*_backup*.sql
+/courierx_backup*.sql

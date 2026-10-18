@@ -6366,6 +6366,18 @@ function setupAuthPortal() {
     // 6. Sign Out
     const logoutBtn = document.getElementById("logoutButton");
     if (logoutBtn) logoutBtn.addEventListener("click", handleLogout);
+
+    // 7. Clickable default admin autofill
+    const demoAdminHint = document.getElementById("demoAdminHint");
+    if (demoAdminHint) {
+        demoAdminHint.addEventListener("click", () => {
+            const emailInput = document.getElementById("loginEmail");
+            const passwordInput = document.getElementById("loginPassword");
+            if (emailInput) emailInput.value = "admin@courierx.com";
+            if (passwordInput) passwordInput.value = "Admin@CourierX2026!";
+            showToast("Credentials Populated", "Default admin login & password filled.");
+        });
+    }
 }
 
 

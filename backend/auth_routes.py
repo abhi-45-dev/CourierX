@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -314,7 +315,19 @@ def login():
         """, (email,))
         user = cursor.fetchone()
 
-        if not user or not verify_password(user["password_hash"], password):
+        if not user:
+            return jsonify({"error": "Invalid email address or password. Please try again."}), 401
+
+        # Verify password hash with resilience for trailing whitespace and punctuation typos
+        is_valid_pw = verify_password(user["password_hash"], password)
+        if not is_valid_pw and password.strip() != password:
+            is_valid_pw = verify_password(user["password_hash"], password.strip())
+        if not is_valid_pw:
+            cleaned_pw = re.sub(r'\s+([!@#$%^&*])', r'\1', password).strip()
+            if cleaned_pw != password:
+                is_valid_pw = verify_password(user["password_hash"], cleaned_pw)
+
+        if not is_valid_pw:
             return jsonify({"error": "Invalid email address or password. Please try again."}), 401
 
         # Check account status
